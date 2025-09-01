@@ -135,8 +135,8 @@ const Chat: React.FC = () => {
     <div className="chat-container">
       <div className="chat-header">
         <div className="header-content">
-          <h1>Lily AI Assistant</h1>
-          <p>Your intelligent companion powered by advanced AI</p>
+          <h1>Chat</h1>
+          <p>A dynamic and intuitive chat interface for seamless communication.</p>
         </div>
         <button className="clear-button" onClick={clearConversation} disabled={messages.length === 0}>
           Clear Chat

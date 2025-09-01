@@ -20,7 +20,7 @@ function App() {
           <button className="menu-button" onClick={toggleSidebar}>
             ☰
           </button>
-          <h1>Lily AI</h1>
+          <h1>Lily</h1>
         </div>
         <Routes>
           <Route path="/" element={<Chat />} />

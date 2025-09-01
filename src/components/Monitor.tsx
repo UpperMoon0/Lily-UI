@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import styles from "./Monitor.module.css";
 
 interface ServiceStatus {
   name: string;
@@ -29,33 +30,29 @@ const Monitor: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchMonitoringData = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch("http://localhost:8000/monitoring");
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data: MonitoringData = await response.json();
-        setMonitoringData(data);
-      } catch (err) {
-        console.error("Error fetching monitoring data:", err);
-        setError("Failed to fetch monitoring data. Please check if the Lily-Core service is running.");
-      } finally {
-        setLoading(false);
+  const fetchMonitoringData = async () => {
+    setLoading(true); 
+    try {
+      const response = await fetch("http://localhost:8000/monitoring");
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
+      
+      const data: MonitoringData = await response.json();
+      setMonitoringData(data);
+      setError(null);
+    } catch (err) {
+      console.error("Error fetching monitoring data:", err);
+      setError("Failed to connect to Lily-Core. Retrying automatically...");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Fetch immediately on component mount
+  useEffect(() => {
     fetchMonitoringData();
-    
-    // Set up interval to fetch every 5 seconds
     const intervalId = setInterval(fetchMonitoringData, 5000);
-    
-    // Clean up interval on component unmount
     return () => clearInterval(intervalId);
   }, []);
 
@@ -74,11 +71,7 @@ const Monitor: React.FC = () => {
 
   const formatUptime = (uptime: string | undefined) => {
     if (!uptime) return "N/A";
-    
-    // If it's already formatted, return as is
     if (uptime.includes(":")) return uptime;
-    
-    // If it's in seconds, convert to human readable format
     const seconds = parseInt(uptime, 10);
     if (isNaN(seconds)) return uptime;
     
@@ -90,27 +83,34 @@ const Monitor: React.FC = () => {
     return `${days}d ${hours}h ${minutes}m ${secs}s`;
   };
 
-  if (loading && !monitoringData) {
+  if (loading && !monitoringData && !error) {
     return (
       <div className="monitor-container">
         <div className="monitor-header">
           <h1>System Monitoring</h1>
         </div>
         <div className="monitor-content">
-          <div className="loading">Loading monitoring data...</div>
+          <div className={styles.loadingContainer}>
+            <div className={styles.spinner}></div>
+            Loading monitoring data...
+          </div>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !monitoringData) {
     return (
       <div className="monitor-container">
         <div className="monitor-header">
           <h1>System Monitoring</h1>
         </div>
         <div className="monitor-content">
-          <div className="error-message">{error}</div>
+          <div className={styles.errorContainer}>
+            <div className={styles.errorIcon}>⚠️</div>
+            <h2>Connection Error</h2>
+            <p>{error}</p>
+          </div>
         </div>
       </div>
     );

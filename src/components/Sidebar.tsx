@@ -19,7 +19,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
       {/* Sidebar */}
       <div className={`sidebar ${isOpen ? "open" : ""}`}>
         <div className="sidebar-header">
-          <h2>Lily AI</h2>
+          <h2>Lily</h2>
           <button className="sidebar-toggle" onClick={toggleSidebar}>
             ×
           </button>
