@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import styles from "./Monitor.module.css";
+import ServiceCard from "./ServiceCard";
+import MCPServiceCard from "./MCPServiceCard";
 
 interface ServiceStatus {
   name: string;
@@ -292,140 +294,51 @@ const Monitor: React.FC = () => {
               <h2>Services Status</h2>
               <div className="services-grid">
                 {monitoringData.services
-                  .filter(service => service.name !== "Tool Discovery Service")
+                  .filter(service => service.name !== "Tool Discovery Service" && service.name !== "MCP Services Summary")
                   .map((service, index) => (
-                    <div key={index} className="service-card">
-                      <div className="service-header">
-                        <h3>{service.name}</h3>
-                        <div className={`status-indicator ${getStatusColor(service.status)}`}>
-                          <span className="status-dot"></span>
-                          <span className="status-text">{service.status}</span>
-                        </div>
-                      </div>
-                      <div className="service-details">
-                        {service.details && Object.keys(service.details).length > 0 ? (
-                          <ul>
-                            {Object.entries(service.details).map(([key, value]) => (
-                              <li key={key}>
-                                <strong>{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:</strong> {String(value)}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p>No additional details</p>
-                        )}
-                      </div>
-                      <div className="service-footer">
-                        Last updated: {new Date(service.last_updated).toLocaleString()}
-                      </div>
-                    </div>
+                    <ServiceCard key={index} service={service} />
                   ))}
               </div>
             </div>
           )}
           
-          {/* Modern Tools Servers and Tools Section */}
-          {monitoringData.services && monitoringData.services.some(service => service.name === "Tool Discovery Service") && (
+          {/* MCP Servers Section */}
+          {monitoringData.services && monitoringData.services.some(service => service.name === "MCP Services Summary") && (
             <div className="services-section">
-              <h2>Tool Discovery Service</h2>
               {monitoringData.services
-                .filter(service => service.name === "Tool Discovery Service")
-                .map((service, serviceIndex) => {
-                  const toolServers = parseToolServersAndTools(service.details);
-
-                  return (
-                    <div key={serviceIndex} style={{ marginBottom: "30px" }}>
-                      {/* Tool Discovery Service Header */}
-                      <div className="service-card" style={{ marginBottom: "20px" }}>
-                        <div className="service-header">
-                          <h3>{service.name}</h3>
-                          <div className={`status-indicator ${getStatusColor(service.status)}`}>
-                            <span className="status-dot"></span>
-                            <span className="status-text">{service.status}</span>
-                          </div>
-                        </div>
-                        <div className="service-details">
-                          <div style={{ display: "flex", gap: "20px", marginBottom: "10px" }}>
-                            <div><strong>Active Servers:</strong> {toolServers.length}</div>
-                            <div><strong>Total Tools:</strong> {toolServers.reduce((sum, server) => sum + server.toolCount, 0)}</div>
-                          </div>
-                        </div>
-                        <div className="service-footer">
-                          Last updated: {new Date(service.last_updated).toLocaleString()}
+                .filter(service => service.name === "MCP Services Summary")
+                .map((summaryService, summaryIndex) => (
+                  <div key={summaryIndex}>
+                    <h2>MCP Servers</h2>
+                    <div className="service-card" style={{ marginBottom: "20px" }}>
+                      <div className="service-header">
+                        <h3>{summaryService.name}</h3>
+                      </div>
+                      <div className="service-details">
+                        <div style={{ display: "flex", gap: "20px", marginBottom: "10px" }}>
+                          {summaryService.details && summaryService.details.active_mcp_servers && (
+                            <div><strong>Active Servers:</strong> {summaryService.details.active_mcp_servers}</div>
+                          )}
+                          {summaryService.details && summaryService.details.total_tools && (
+                            <div><strong>Total Tools:</strong> {summaryService.details.total_tools}</div>
+                          )}
                         </div>
                       </div>
-
-                      {/* Tool Servers Grid */}
-                      {toolServers.length > 0 && (
-                        <div style={{ marginTop: "20px" }}>
-                          <h3 style={{ marginBottom: "15px", color: "var(--text-primary)" }}>Connected Tool Servers</h3>
-                          <div className="services-grid">
-                            {toolServers.map((server, serverIndex) => (
-                              <div key={serverIndex} className="service-card" style={{ borderLeft: server.isOnline ? '4px solid var(--success-color)' : '4px solid var(--error-color)' }}>
-                                <div className="service-header">
-                                  <h4 style={{ margin: "0", fontSize: "1rem" }}>🔗 Tool Server</h4>
-                                  <div className={`status-indicator ${getStatusColor(server.isOnline ? "healthy" : "down")}`}>
-                                    <span className="status-dot"></span>
-                                    <span className="status-text">{server.isOnline ? "Online" : "Offline"}</span>
-                                  </div>
-                                </div>
-                                <div className="service-details">
-                                  <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "10px" }}>
-                                    <strong>URL:</strong> {server.url}
-                                  </p>
-                                  <p style={{ marginBottom: "15px" }}>
-                                    <strong>Tools:</strong> {server.toolCount}
-                                  </p>
-
-                                  {/* Tools within this server */}
-                                  <div>
-                                    <strong>Available Tools:</strong>
-                                    <div style={{ marginTop: "10px" }}>
-                                      {server.tools.map((tool, toolIndex) => (
-                                        <div key={toolIndex} style={{
-                                          backgroundColor: "var(--background-tertiary)",
-                                          borderRadius: "8px",
-                                          padding: "12px",
-                                          marginBottom: "8px",
-                                          border: "1px solid var(--border-color)"
-                                        }}>
-                                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                            <div style={{ flex: 1 }}>
-                                              <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
-                                                <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>🔧</span>
-                                                <strong style={{ color: "var(--text-primary)" }}>{tool.name}</strong>
-                                              </div>
-                                              <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", margin: "4px 0" }}>
-                                                {tool.description}
-                                              </p>
-                                              {tool.inputSchema && tool.inputSchema.properties && (
-                                                <div style={{ marginTop: "8px" }}>
-                                                  <strong style={{ fontSize: "0.8rem", color: "var(--accent-color)" }}>Parameters:</strong>
-                                                  <ul style={{ margin: "4px 0 0 16px", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                                                    {Object.entries(tool.inputSchema.properties).map(([paramName, paramDetails]: [string, any]) => (
-                                                      <li key={paramName}>
-                                                        <code>{paramName}</code>
-                                                        {paramDetails.description && ` - ${paramDetails.description}`}
-                                                      </li>
-                                                    ))}
-                                                  </ul>
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <div className="service-footer">
+                        Last updated: {new Date(summaryService.last_updated).toLocaleString()}
+                      </div>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
+              
+              {/* Individual MCP Server Entries with Tools */}
+              <div className="services-grid">
+                {monitoringData.services
+                  .filter(service => service.name !== "MCP Services Summary" && service.details && service.details.type === "MCP Server")
+                  .map((service, index) => (
+                    <MCPServiceCard key={index} service={service} showStatus={false} />
+                  ))}
+              </div>
             </div>
           )}
         </div>

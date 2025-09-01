@@ -6,11 +6,28 @@ interface Message {
   timestamp: string;
 }
 
+interface TTSParameters {
+  speaker: number;
+  sample_rate: number;
+  model: string;
+  lang: string;
+}
+
 const Chat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // TTS state
+  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [ttsParams, setTtsParams] = useState<TTSParameters>({
+    speaker: 0,
+    sample_rate: 24000,
+    model: "edge",
+    lang: "en-US"
+  });
+  const [showTtsSettings, setShowTtsSettings] = useState(false);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -60,16 +77,26 @@ const Chat: React.FC = () => {
     setIsLoading(true);
 
     try {
+      // Prepare request body with TTS parameters if enabled
+      const requestBody: any = {
+        message: inputValue,
+        user_id: "default_user",
+      };
+
+      if (ttsEnabled) {
+        requestBody.tts = {
+          enabled: true,
+          params: ttsParams
+        };
+      }
+
       // Send message to Lily-Core API
       const response = await fetch("http://localhost:8000/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          message: inputValue,
-          user_id: "default_user",
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -131,6 +158,14 @@ const Chat: React.FC = () => {
     }
   };
 
+  // Handle TTS parameter changes
+  const handleTtsParamChange = (param: keyof TTSParameters, value: string | number) => {
+    setTtsParams(prev => ({
+      ...prev,
+      [param]: value
+    }));
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-header">
@@ -138,10 +173,78 @@ const Chat: React.FC = () => {
           <h1>Chat</h1>
           <p>A dynamic and intuitive chat interface for seamless communication.</p>
         </div>
-        <button className="clear-button" onClick={clearConversation} disabled={messages.length === 0}>
-          Clear Chat
-        </button>
+        <div className="header-controls">
+          <button className="tts-toggle" onClick={() => setTtsEnabled(!ttsEnabled)}>
+            TTS: {ttsEnabled ? "ON" : "OFF"}
+          </button>
+          <button className="tts-settings" onClick={() => setShowTtsSettings(!showTtsSettings)}>
+            Settings
+          </button>
+          <button className="clear-button" onClick={clearConversation} disabled={messages.length === 0}>
+            Clear Chat
+          </button>
+        </div>
       </div>
+      
+      {showTtsSettings && (
+        <div className="tts-settings-panel">
+          <h3>TTS Settings</h3>
+          <div className="setting-group">
+            <label>Speaker:</label>
+            <select
+              value={ttsParams.speaker}
+              onChange={(e) => handleTtsParamChange('speaker', parseInt(e.target.value))}
+            >
+              <option value="0">Default Male Voice</option>
+              <option value="1">Default Female Voice</option>
+              <option value="2">Alternative Male Voice</option>
+              <option value="3">Alternative Female Voice</option>
+            </select>
+          </div>
+          
+          <div className="setting-group">
+            <label>Sample Rate:</label>
+            <select
+              value={ttsParams.sample_rate}
+              onChange={(e) => handleTtsParamChange('sample_rate', parseInt(e.target.value))}
+            >
+              <option value="8000">8000 Hz</option>
+              <option value="16000">16000 Hz</option>
+              <option value="22050">22050 Hz</option>
+              <option value="24000">24000 Hz</option>
+              <option value="44100">44100 Hz</option>
+              <option value="48000">48000 Hz</option>
+            </select>
+          </div>
+          
+          <div className="setting-group">
+            <label>Model:</label>
+            <select
+              value={ttsParams.model}
+              onChange={(e) => handleTtsParamChange('model', e.target.value)}
+            >
+              <option value="edge">Edge TTS</option>
+              <option value="zonos">Zonos TTS</option>
+            </select>
+          </div>
+          
+          <div className="setting-group">
+            <label>Language:</label>
+            <select
+              value={ttsParams.lang}
+              onChange={(e) => handleTtsParamChange('lang', e.target.value)}
+            >
+              <option value="en-US">English (US)</option>
+              <option value="en-GB">English (UK)</option>
+              <option value="es-ES">Spanish</option>
+              <option value="fr-FR">French</option>
+              <option value="de-DE">German</option>
+              <option value="ja-JP">Japanese</option>
+              <option value="zh-CN">Chinese</option>
+            </select>
+          </div>
+        </div>
+      )}
       
       <div className="messages-container">
         {messages.length === 0 ? (
@@ -196,8 +299,8 @@ const Chat: React.FC = () => {
             disabled={isLoading}
             rows={1}
           />
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading || !inputValue.trim()}
             className="send-button"
           >
