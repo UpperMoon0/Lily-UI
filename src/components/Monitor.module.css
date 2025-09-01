@@ -41,4 +41,146 @@
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+
+/* Tool Server Card Styles */
+.serverCard {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.serverCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.serverCard .serverHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.serverCard .serverIcon {
+  font-size: 1.5rem;
+  margin-right: 10px;
+}
+
+.serverCard .serverUrl {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+/* Tool Card Styles */
+.toolCard {
+  background: linear-gradient(135deg, var(--background-secondary) 0%, var(--background-tertiary) 100%);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.toolCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(to bottom, var(--accent-color), var(--accent-color-hover));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.toolCard:hover::before {
+  opacity: 1;
+}
+
+.toolCard:hover {
+  border-color: var(--accent-color);
+  transform: translateX(4px);
+  box-shadow: 0 4px 20px rgba(187, 134, 252, 0.1);
+}
+
+.toolHeader {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.toolIcon {
+  font-size: 1.3rem;
+  margin-right: 10px;
+  opacity: 0.8;
+}
+
+.toolDescription {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 6px 0;
+  line-height: 1.4;
+}
+
+.parametersSection {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.parameterList {
+  margin: 8px 0 0 0;
+  padding-left: 16px;
+}
+
+.parameterItem {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  font-family: 'Courier New', monospace;
+}
+
+.parameterName {
+  color: var(--accent-color);
+  font-weight: bold;
+}
+
+/* Server Status Indicator */
+.serverStatus {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.serverStatus.online {
+  background-color: var(--success-color);
+  color: white;
+}
+
+.serverStatus.offline {
+  background-color: var(--error-color);
+  color: white;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .toolCard:hover {
+    transform: none;
+  }
+
+  .serverCard:hover {
+    transform: none;
+  }
+}
 }

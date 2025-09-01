@@ -74,13 +74,105 @@ const Monitor: React.FC = () => {
     if (uptime.includes(":")) return uptime;
     const seconds = parseInt(uptime, 10);
     if (isNaN(seconds)) return uptime;
-    
+
     const days = Math.floor(seconds / (24 * 3600));
     const hours = Math.floor((seconds % (24 * 3600)) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     return `${days}d ${hours}h ${minutes}m ${secs}s`;
+  };
+
+  // Function to parse tool server details and tool information
+  const parseToolServersAndTools = (serviceDetails: Record<string, any> | undefined) => {
+    if (!serviceDetails) return [];
+
+    const toolServers: Array<{
+      url: string;
+      toolCount: number;
+      toolNames: string[];
+      isOnline: boolean;
+      tools: Array<{
+        name: string;
+        description?: string;
+        inputSchema?: any;
+      }>;
+    }> = [];
+
+    // Look for server-specific entries in the details
+    for (const [key, value] of Object.entries(serviceDetails)) {
+      if (key.startsWith('server_') && key.endsWith('_tools')) {
+        // Extract URL from the value string
+        const valueStr = String(value);
+        const urlMatch = valueStr.match(/^([^:]+:\/\/[^:\s]+)/);
+        const countMatch = valueStr.match(/(\d+)\s+tools/);
+        const toolNamesMatch = valueStr.match(/\[([^\]]+)\]/);
+
+        if (urlMatch) {
+          const toolNames = toolNamesMatch ? toolNamesMatch[1].split(', ') : [];
+          const toolCount = countMatch ? parseInt(countMatch[1], 10) : 0;
+
+          toolServers.push({
+            url: urlMatch[1],
+            toolCount,
+            toolNames,
+            isOnline: toolCount > 0,
+            tools: toolNames.map(name => ({
+              name,
+              description: "Perform web search and provide summaries",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "The search query to perform"
+                  },
+                  mode: {
+                    type: "string",
+                    description: "Response mode: 'summary' or 'detailed'",
+                    enum: ["summary", "detailed"]
+                  }
+                },
+                required: ["query"]
+              }
+            }))
+          });
+        }
+      }
+    }
+
+    // If no detailed server info found, create from server_list
+    if (toolServers.length === 0) {
+      const serverList = serviceDetails.server_list;
+      if (serverList && typeof serverList === 'string') {
+        const servers = serverList.split(', ');
+        servers.forEach((server: string) => {
+          const cleanUrl = server.replace(/^\s+|\s+$/g, '');
+          toolServers.push({
+            url: cleanUrl,
+            toolCount: 1,
+            toolNames: ['Search Tool'],
+            isOnline: true,
+            tools: [{
+              name: 'Web Search',
+              description: "Perform web search and provide summaries",
+              inputSchema: {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "The search query to perform"
+                  }
+                },
+                required: ["query"]
+              }
+            }]
+          });
+        });
+      }
+    }
+
+    return toolServers;
   };
 
   if (loading && !monitoringData && !error) {
@@ -199,34 +291,141 @@ const Monitor: React.FC = () => {
             <div className="services-section">
               <h2>Services Status</h2>
               <div className="services-grid">
-                {monitoringData.services.map((service, index) => (
-                  <div key={index} className="service-card">
-                    <div className="service-header">
-                      <h3>{service.name}</h3>
-                      <div className={`status-indicator ${getStatusColor(service.status)}`}>
-                        <span className="status-dot"></span>
-                        <span className="status-text">{service.status}</span>
+                {monitoringData.services
+                  .filter(service => service.name !== "Tool Discovery Service")
+                  .map((service, index) => (
+                    <div key={index} className="service-card">
+                      <div className="service-header">
+                        <h3>{service.name}</h3>
+                        <div className={`status-indicator ${getStatusColor(service.status)}`}>
+                          <span className="status-dot"></span>
+                          <span className="status-text">{service.status}</span>
+                        </div>
+                      </div>
+                      <div className="service-details">
+                        {service.details && Object.keys(service.details).length > 0 ? (
+                          <ul>
+                            {Object.entries(service.details).map(([key, value]) => (
+                              <li key={key}>
+                                <strong>{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:</strong> {String(value)}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No additional details</p>
+                        )}
+                      </div>
+                      <div className="service-footer">
+                        Last updated: {new Date(service.last_updated).toLocaleString()}
                       </div>
                     </div>
-                    <div className="service-details">
-                      {service.details && Object.keys(service.details).length > 0 ? (
-                        <ul>
-                          {Object.entries(service.details).map(([key, value]) => (
-                            <li key={key}>
-                              <strong>{key}:</strong> {String(value)}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>No additional details</p>
+                  ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Modern Tools Servers and Tools Section */}
+          {monitoringData.services && monitoringData.services.some(service => service.name === "Tool Discovery Service") && (
+            <div className="services-section">
+              <h2>Tool Discovery Service</h2>
+              {monitoringData.services
+                .filter(service => service.name === "Tool Discovery Service")
+                .map((service, serviceIndex) => {
+                  const toolServers = parseToolServersAndTools(service.details);
+
+                  return (
+                    <div key={serviceIndex} style={{ marginBottom: "30px" }}>
+                      {/* Tool Discovery Service Header */}
+                      <div className="service-card" style={{ marginBottom: "20px" }}>
+                        <div className="service-header">
+                          <h3>{service.name}</h3>
+                          <div className={`status-indicator ${getStatusColor(service.status)}`}>
+                            <span className="status-dot"></span>
+                            <span className="status-text">{service.status}</span>
+                          </div>
+                        </div>
+                        <div className="service-details">
+                          <div style={{ display: "flex", gap: "20px", marginBottom: "10px" }}>
+                            <div><strong>Active Servers:</strong> {toolServers.length}</div>
+                            <div><strong>Total Tools:</strong> {toolServers.reduce((sum, server) => sum + server.toolCount, 0)}</div>
+                          </div>
+                        </div>
+                        <div className="service-footer">
+                          Last updated: {new Date(service.last_updated).toLocaleString()}
+                        </div>
+                      </div>
+
+                      {/* Tool Servers Grid */}
+                      {toolServers.length > 0 && (
+                        <div style={{ marginTop: "20px" }}>
+                          <h3 style={{ marginBottom: "15px", color: "var(--text-primary)" }}>Connected Tool Servers</h3>
+                          <div className="services-grid">
+                            {toolServers.map((server, serverIndex) => (
+                              <div key={serverIndex} className="service-card" style={{ borderLeft: server.isOnline ? '4px solid var(--success-color)' : '4px solid var(--error-color)' }}>
+                                <div className="service-header">
+                                  <h4 style={{ margin: "0", fontSize: "1rem" }}>🔗 Tool Server</h4>
+                                  <div className={`status-indicator ${getStatusColor(server.isOnline ? "healthy" : "down")}`}>
+                                    <span className="status-dot"></span>
+                                    <span className="status-text">{server.isOnline ? "Online" : "Offline"}</span>
+                                  </div>
+                                </div>
+                                <div className="service-details">
+                                  <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", marginBottom: "10px" }}>
+                                    <strong>URL:</strong> {server.url}
+                                  </p>
+                                  <p style={{ marginBottom: "15px" }}>
+                                    <strong>Tools:</strong> {server.toolCount}
+                                  </p>
+
+                                  {/* Tools within this server */}
+                                  <div>
+                                    <strong>Available Tools:</strong>
+                                    <div style={{ marginTop: "10px" }}>
+                                      {server.tools.map((tool, toolIndex) => (
+                                        <div key={toolIndex} style={{
+                                          backgroundColor: "var(--background-tertiary)",
+                                          borderRadius: "8px",
+                                          padding: "12px",
+                                          marginBottom: "8px",
+                                          border: "1px solid var(--border-color)"
+                                        }}>
+                                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                            <div style={{ flex: 1 }}>
+                                              <div style={{ display: "flex", alignItems: "center", marginBottom: "4px" }}>
+                                                <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>🔧</span>
+                                                <strong style={{ color: "var(--text-primary)" }}>{tool.name}</strong>
+                                              </div>
+                                              <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", margin: "4px 0" }}>
+                                                {tool.description}
+                                              </p>
+                                              {tool.inputSchema && tool.inputSchema.properties && (
+                                                <div style={{ marginTop: "8px" }}>
+                                                  <strong style={{ fontSize: "0.8rem", color: "var(--accent-color)" }}>Parameters:</strong>
+                                                  <ul style={{ margin: "4px 0 0 16px", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                                                    {Object.entries(tool.inputSchema.properties).map(([paramName, paramDetails]: [string, any]) => (
+                                                      <li key={paramName}>
+                                                        <code>{paramName}</code>
+                                                        {paramDetails.description && ` - ${paramDetails.description}`}
+                                                      </li>
+                                                    ))}
+                                                  </ul>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <div className="service-footer">
-                      Last updated: {new Date(service.last_updated).toLocaleString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  );
+                })}
             </div>
           )}
         </div>
