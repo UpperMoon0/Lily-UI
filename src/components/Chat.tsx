@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import "./Chat.css";
+import logService from "../services/LogService";
 
 interface Message {
   role: "user" | "assistant";
@@ -17,6 +19,8 @@ const Chat: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // TTS state
@@ -38,9 +42,49 @@ const Chat: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Load conversation history on component mount
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      if (currentAudio) {
+        currentAudio.pause();
+        setCurrentAudio(null);
+        setIsPlaying(false);
+      }
+    };
+  }, [currentAudio]);
+
+  // Load conversation history and connect to WebSocket on component mount
   useEffect(() => {
     loadConversationHistory();
+
+    const ws = new WebSocket("ws://localhost:9002");
+
+    ws.onopen = () => {
+      console.log("WebSocket connection established");
+      ws.send("register:default_user");
+    };
+
+    ws.onmessage = (event) => {
+      if (event.data instanceof Blob) {
+        const audioUrl = URL.createObjectURL(event.data);
+        const audio = new Audio(audioUrl);
+        audio.play();
+        
+        // Log TTS response received event
+        logService.logTTSResponse({
+          size: event.data.size,
+          type: event.data.type
+        });
+      }
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed");
+    };
+
+    return () => {
+      ws.close();
+    };
   }, []);
 
   const loadConversationHistory = async () => {
@@ -61,6 +105,7 @@ const Chat: React.FC = () => {
     }
   };
 
+
   // Send message to Lily-Core API
   const sendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -73,6 +118,9 @@ const Chat: React.FC = () => {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    
+    // Log chat sent event
+    logService.logChatSent(inputValue);
     setInputValue("");
     setIsLoading(true);
 
@@ -113,6 +161,12 @@ const Chat: React.FC = () => {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+      
+      // Log chat response received event
+      logService.logChatResponse(data.response, {
+        timestamp: data.timestamp,
+        user_id: "default_user"
+      });
     } catch (error) {
       console.error("Error sending message:", error);
       
@@ -152,6 +206,12 @@ const Chat: React.FC = () => {
       
       if (response.ok) {
         setMessages([]);
+        // Stop any playing audio
+        if (currentAudio) {
+          currentAudio.pause();
+          setCurrentAudio(null);
+          setIsPlaying(false);
+        }
       }
     } catch (error) {
       console.error("Error clearing conversation:", error);

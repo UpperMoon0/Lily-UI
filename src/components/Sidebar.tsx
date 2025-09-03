@@ -41,6 +41,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
             <span className="nav-icon">📊</span>
             <span className="nav-text">Monitor</span>
           </Link>
+          <Link
+            to="/log"
+            className={`nav-link ${location.pathname === "/log" ? "active" : ""}`}
+            onClick={() => window.innerWidth <= 768 && toggleSidebar()}
+          >
+            <span className="nav-icon">📝</span>
+            <span className="nav-text">Log</span>
+          </Link>
         </nav>
       </div>
     </>
