@@ -3,6 +3,8 @@ import "./Chat.css";
 import logService from "../services/LogService";
 import persistenceService from "../services/PersistenceService";
 import webSocketService from "../services/WebSocketService";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 interface Message {
   role: "user" | "assistant";
@@ -57,100 +59,81 @@ const Chat: React.FC = () => {
     };
   }, [currentAudio]);
 
-  // Load conversation history and set up WebSocket listeners on component mount
+  // Load conversation history and set up event listeners on component mount
   useEffect(() => {
     loadConversationHistory();
     loadPersistedData();
 
-    // Set up WebSocket message listener
-    const handleWebSocketMessage = (event: any) => {
-      // Handle pong messages for health checking
-      if (event.data === "pong") {
-        // Connection is healthy
-        return;
-      }
+    // Set up event listeners for WebSocket binary data (audio) and status
+    const unsubscribePromises: Promise<() => void>[] = [];
+
+    // Listen for WebSocket binary events (audio data)
+    const audioListenerPromise = listen('websocket-binary', (event: { payload: Uint8Array }) => {
+      const blob = new Blob([event.payload], { type: 'audio/wav' });
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
       
-      if (event.data === "registered") {
-        // Registration confirmation
-        setIsRegistered(true);
-        return;
-      }
+      // Set up audio event listeners
+      audio.onplay = () => {
+        setIsPlaying(true);
+        setCurrentAudio(audio);
+      };
       
-      if (event.data instanceof Blob) {
-        const audioUrl = URL.createObjectURL(event.data);
-        const audio = new Audio(audioUrl);
-        
-        // Set up audio event listeners
-        audio.onplay = () => {
-          setIsPlaying(true);
-          setCurrentAudio(audio);
-        };
-        
-        audio.onended = () => {
-          setIsPlaying(false);
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-        };
-        
-        audio.onerror = (error) => {
-          console.error("Audio playback error:", error);
-          setIsPlaying(false);
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-        };
-        
-        // Play the audio
-        audio.play().catch(error => {
-          console.error("Error playing audio:", error);
-          setIsPlaying(false);
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-        });
-        
-        // Log TTS response received event
-        logService.logTTSResponse({
-          size: event.data.size,
-          type: event.data.type
-        });
-      }
-    };
+      audio.onended = () => {
+        setIsPlaying(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      audio.onerror = (error) => {
+        console.error("Audio playback error:", error);
+        setIsPlaying(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      // Play the audio
+      audio.play().catch(error => {
+        console.error("Error playing audio:", error);
+        setIsPlaying(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+      });
+      
+      // Log TTS response received event
+      logService.logTTSResponse({
+        size: blob.size,
+        type: blob.type
+      });
+    }).then(unsubscribe => unsubscribe);
 
-    // Set up WebSocket connection status listener
-    const handleConnectionStatus = (connected: boolean) => {
-      setIsConnected(connected);
-      if (!connected) {
-        setIsRegistered(false);
-      }
-    };
+    unsubscribePromises.push(audioListenerPromise);
 
-    // Add listeners
-    webSocketService.addMessageListener(handleWebSocketMessage);
-    webSocketService.addConnectionListener(handleConnectionStatus);
+    // Listen for WebSocket status events
+    const statusListenerPromise = listen('websocket-status', (event: { payload: { connected: boolean; registered: boolean } }) => {
+      const status = event.payload;
+      setIsConnected(status.connected);
+      setIsRegistered(status.registered);
+    }).then(unsubscribe => unsubscribe);
 
-    // Set initial connection status
+    unsubscribePromises.push(statusListenerPromise);
+
+    // Set initial connection status from WebSocket service
     setIsConnected(webSocketService.getIsConnected());
     setIsRegistered(webSocketService.getIsRegistered());
 
     return () => {
-      // Remove listeners
-      webSocketService.removeMessageListener(handleWebSocketMessage);
-      webSocketService.removeConnectionListener(handleConnectionStatus);
+      // Clean up event listeners
+      Promise.all(unsubscribePromises).then(unsubscribeFunctions => {
+        unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
+      });
     };
   }, []);
 
   const loadConversationHistory = async () => {
     try {
-      const response = await fetch("http://localhost:8000/conversation/default_user");
-      
-      if (response.ok) {
-        const data = await response.json();
-        const historyMessages = data.conversation.map((msg: any) => ({
-          role: msg.role,
-          content: msg.content,
-          timestamp: msg.timestamp,
-        }));
-        setMessages(historyMessages);
-      }
+      const historyMessages = await invoke<Message[]>('get_conversation_history');
+      setMessages(historyMessages);
     } catch (error) {
       console.error("Error loading conversation history:", error);
     }
@@ -177,7 +160,7 @@ const Chat: React.FC = () => {
   };
 
 
-  // Send message to Lily-Core API
+  // Send message to Lily-Core API via Rust
   const sendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
 
@@ -201,33 +184,12 @@ const Chat: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Prepare request body with TTS parameters if enabled
-      const requestBody: any = {
+      // Send message via Rust command
+      const data = await invoke<{ response: string; timestamp: string }>('send_chat_message', {
         message: inputValue,
-        user_id: "default_user",
-      };
-
-      if (ttsEnabled) {
-        requestBody.tts = {
-          enabled: true,
-          params: ttsParams
-        };
-      }
-
-      // Send message to Lily-Core API
-      const response = await fetch("http://localhost:8000/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
+        tts_enabled: ttsEnabled,
+        tts_params: ttsEnabled ? ttsParams : undefined
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
 
       // Add assistant message to UI
       const assistantMessage: Message = {
@@ -283,23 +245,18 @@ const Chat: React.FC = () => {
     }
   };
 
-  // Clear conversation
+  // Clear conversation via Rust
   const clearConversation = async () => {
     try {
-      const response = await fetch("http://localhost:8000/conversation/default_user", {
-        method: "DELETE",
-      });
-      
-      if (response.ok) {
-        setMessages([]);
-        // Clear persisted chat history
-        persistenceService.clearChatHistory();
-        // Stop any playing audio
-        if (currentAudio) {
-          currentAudio.pause();
-          setCurrentAudio(null);
-          setIsPlaying(false);
-        }
+      await invoke('clear_conversation');
+      setMessages([]);
+      // Clear persisted chat history
+      persistenceService.clearChatHistory();
+      // Stop any playing audio
+      if (currentAudio) {
+        currentAudio.pause();
+        setCurrentAudio(null);
+        setIsPlaying(false);
       }
     } catch (error) {
       console.error("Error clearing conversation:", error);

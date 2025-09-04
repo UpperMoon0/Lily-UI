@@ -1,239 +1,79 @@
 // WebSocketService.ts
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+
 class WebSocketService {
-  private ws: WebSocket | null = null;
-  private reconnectTimeout: NodeJS.Timeout | null = null;
-  private heartbeatInterval: NodeJS.Timeout | null = null;
   private isConnected: boolean = false;
   private isRegistered: boolean = false;
   private listeners: Array<(message: any) => void> = [];
   private connectionListeners: Array<(connected: boolean) => void> = [];
   private isAppClosing: boolean = false;
-  private registrationAttempts: number = 0;
-  private maxRegistrationAttempts: number = 10;
-  private registrationInterval: NodeJS.Timeout | null = null;
+  private unsubscribeFunctions: Array<() => void> = [];
 
-  // Connect to WebSocket server
-  connect() {
-    console.log("WebSocketService: Initiating connection to ws://localhost:9002");
+  // Connect to WebSocket server via Rust
+  async connect() {
+    console.log("WebSocketService: Initiating connection via Rust backend");
     
-    // Clear any existing reconnect timeout
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-
-    // Clear any existing heartbeat interval
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-
-    // Clear any existing registration interval
-    if (this.registrationInterval) {
-      clearInterval(this.registrationInterval);
-      this.registrationInterval = null;
-    }
-
-    // Reset registration status
-    this.isRegistered = false;
-
-    // Close existing connection if present
-    if (this.ws) {
-      console.log("WebSocketService: Closing existing WebSocket connection");
-      this.ws.close();
-      this.ws = null;
-    }
-
-    console.log("WebSocketService: Creating new WebSocket instance");
-    this.ws = new WebSocket("ws://localhost:9002");
-
-    this.ws.onopen = () => {
-      if (this.isAppClosing) {
-        this.ws?.close();
-        return;
-      }
-      console.log("WebSocketService: Connection established successfully");
-      this.isConnected = true;
-      this.notifyConnectionListeners(true);
-      
-      // Reset registration attempts
-      this.registrationAttempts = 0;
-      
-      // Start registration process
-      console.log("WebSocketService: Starting registration process");
-      this.startRegistration();
-      
-      // Set up heartbeat to check connection health
-      console.log("WebSocketService: Starting heartbeat interval (30s)");
-      this.heartbeatInterval = setInterval(() => {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          // Send a ping message to check connection health
-          console.log("WebSocketService: Sending heartbeat ping");
-          this.ws.send("ping");
-        } else if (this.ws && this.ws.readyState !== WebSocket.CONNECTING) {
-          // Connection is not open, clear interval and trigger reconnect
-          console.log("WebSocketService: Connection not open, triggering reconnect");
-          this.isConnected = false;
-          this.isRegistered = false;
-          this.notifyConnectionListeners(false);
-          if (this.heartbeatInterval) {
-            clearInterval(this.heartbeatInterval);
-            this.heartbeatInterval = null;
-          }
-          this.ws.close();
-        }
-      }, 30000); // Send ping every 30 seconds
-    };
-
-    this.ws.onmessage = (event) => {
-      if (this.isAppClosing) return;
-      
-      // Handle pong messages for health checking
-      if (event.data === "pong") {
-        console.log("WebSocketService: Received heartbeat pong - connection healthy");
-        return;
-      }
-      
-      // Handle registration confirmation
-      if (event.data === "registered") {
-        console.log("WebSocketService: Client registered successfully with server");
-        this.isRegistered = true;
-        // Clear registration interval since we're registered
-        if (this.registrationInterval) {
-          clearInterval(this.registrationInterval);
-          this.registrationInterval = null;
-        }
-        return;
-      }
-      
-      console.log("WebSocketService: Received message:", event.data);
-      
-      // Notify all listeners of the message
-      this.listeners.forEach(listener => {
-        listener(event);
+    this.isAppClosing = false;
+    
+    // Set up event listeners for WebSocket status and messages
+    try {
+      // Listen for WebSocket status events
+      const unsubscribeStatus = await listen('websocket-status', (event: any) => {
+        const status = event.payload;
+        console.log("WebSocketService: Status update received:", status);
+        this.isConnected = status.connected;
+        this.isRegistered = status.registered;
+        this.notifyConnectionListeners(this.isConnected);
       });
-    };
+      this.unsubscribeFunctions.push(unsubscribeStatus);
 
-    this.ws.onclose = () => {
-      if (this.isAppClosing) return;
-      
-      console.log("WebSocketService: Connection closed");
-      this.isConnected = false;
-      this.isRegistered = false;
-      this.notifyConnectionListeners(false);
-      
-      // Clear intervals
-      if (this.heartbeatInterval) {
-        clearInterval(this.heartbeatInterval);
-        this.heartbeatInterval = null;
-        console.log("WebSocketService: Heartbeat interval cleared");
-      }
-      
-      if (this.registrationInterval) {
-        clearInterval(this.registrationInterval);
-        this.registrationInterval = null;
-        console.log("WebSocketService: Registration interval cleared");
-      }
-      
-      // Attempt to reconnect after 3 seconds
-      if (!this.isAppClosing) {
-        console.log("WebSocketService: Scheduling reconnect in 3 seconds");
-        this.reconnectTimeout = setTimeout(() => {
-          console.log("WebSocketService: Attempting to reconnect...");
-          this.connect();
-        }, 3000);
-      }
-    };
+      // Listen for WebSocket message events
+      const unsubscribeMessage = await listen('websocket-message', (event: any) => {
+        console.log("WebSocketService: Message received:", event.payload);
+        this.notifyMessageListeners(event.payload);
+      });
+      this.unsubscribeFunctions.push(unsubscribeMessage);
 
-    this.ws.onerror = (error) => {
-      if (this.isAppClosing) return;
-      
-      console.error("WebSocketService: Error occurred:", error);
-      this.isConnected = false;
-      this.isRegistered = false;
-      this.notifyConnectionListeners(false);
-      // Close the connection to trigger reconnect
-      console.log("WebSocketService: Closing connection due to error");
-      this.ws?.close();
-    };
-  }
-
-  // Start registration process with retries
-  private startRegistration() {
-    console.log("WebSocketService: Starting registration process with retries");
-    
-    // Clear any existing registration interval
-    if (this.registrationInterval) {
-      clearInterval(this.registrationInterval);
+      // Listen for WebSocket binary events (e.g., audio)
+      const unsubscribeBinary = await listen('websocket-binary', (event: any) => {
+        console.log("WebSocketService: Binary data received");
+        this.notifyMessageListeners(event.payload);
+      });
+      this.unsubscribeFunctions.push(unsubscribeBinary);
+    } catch (error) {
+      console.error("WebSocketService: Failed to set up event listeners:", error);
+      throw error;
     }
-    
-    // Send initial registration
-    this.sendRegistration();
-    
-    // Set up periodic registration attempts
-    this.registrationInterval = setInterval(() => {
-      if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN && !this.isRegistered) {
-        this.registrationAttempts++;
-        if (this.registrationAttempts <= this.maxRegistrationAttempts) {
-          console.log(`WebSocketService: Registration attempt ${this.registrationAttempts}/${this.maxRegistrationAttempts}`);
-          this.sendRegistration();
-        } else {
-          console.warn("WebSocketService: Max registration attempts reached");
-          if (this.registrationInterval) {
-            clearInterval(this.registrationInterval);
-            this.registrationInterval = null;
-          }
-        }
-      } else if (this.isRegistered) {
-        // We're registered, clear the interval
-        if (this.registrationInterval) {
-          clearInterval(this.registrationInterval);
-          this.registrationInterval = null;
-          console.log("WebSocketService: Registration interval cleared - client is registered");
-        }
-      }
-    }, 2000); // Retry every 2 seconds
-  }
 
-  // Send registration message
-  private sendRegistration() {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log("WebSocketService: Sending registration message: register:default_user");
-      this.ws.send("register:default_user");
-    } else {
-      console.log("WebSocketService: Cannot send registration - WebSocket not open");
+    // Start WebSocket connection through Rust
+    try {
+      await invoke('connect_websocket');
+      console.log("WebSocketService: Connection initiated via Rust");
+    } catch (error) {
+      console.error("WebSocketService: Failed to connect via Rust:", error);
+      throw error;
     }
   }
 
-  // Disconnect from WebSocket server
-  disconnect() {
-    console.log("WebSocketService: Disconnecting WebSocket");
+  // Disconnect from WebSocket server via Rust
+  async disconnect() {
+    console.log("WebSocketService: Disconnecting WebSocket via Rust");
     this.isAppClosing = true;
     
-    // Clean up intervals
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-      console.log("WebSocketService: Reconnect timeout cleared");
-    }
+    // Clean up event listeners
+    this.unsubscribeFunctions.forEach(unsubscribe => {
+      unsubscribe();
+    });
+    this.unsubscribeFunctions = [];
     
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-      console.log("WebSocketService: Heartbeat interval cleared");
-    }
-    
-    if (this.registrationInterval) {
-      clearInterval(this.registrationInterval);
-      this.registrationInterval = null;
-      console.log("WebSocketService: Registration interval cleared");
-    }
-    
-    // Clean up WebSocket connection
-    if (this.ws) {
-      console.log("WebSocketService: Closing WebSocket connection");
-      this.ws.close();
-      this.ws = null;
+    // Disconnect through Rust
+    try {
+      await invoke('disconnect_websocket');
+      console.log("WebSocketService: Disconnected via Rust");
+    } catch (error) {
+      console.error("WebSocketService: Failed to disconnect via Rust:", error);
+      throw error;
     }
     
     // Reset status
@@ -242,13 +82,14 @@ class WebSocketService {
     console.log("WebSocketService: Connection status reset");
   }
 
-  // Send a message through the WebSocket
-  send(message: string) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log("WebSocketService: Sending message:", message);
-      this.ws.send(message);
-    } else {
-      console.warn("WebSocketService: WebSocket is not connected. Message not sent:", message);
+  // Send a message through the WebSocket via Rust
+  async send(message: string) {
+    try {
+      await invoke('send_websocket_message', { message });
+      console.log("WebSocketService: Message sent via Rust:", message);
+    } catch (error) {
+      console.error("WebSocketService: Failed to send message via Rust:", error);
+      throw error;
     }
   }
 
@@ -286,6 +127,13 @@ class WebSocketService {
     if (index !== -1) {
       this.connectionListeners.splice(index, 1);
     }
+  }
+
+  // Notify all message listeners
+  private notifyMessageListeners(message: any) {
+    this.listeners.forEach(listener => {
+      listener(message);
+    });
   }
 
   // Notify all connection listeners

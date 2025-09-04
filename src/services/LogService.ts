@@ -1,4 +1,6 @@
 // LogService.ts
+import { invoke } from '@tauri-apps/api/core';
+
 interface LogEntry {
   id: string;
   timestamp: Date;
@@ -8,14 +10,14 @@ interface LogEntry {
 }
 
 class LogService {
-  private logs: LogEntry[] = [];
   private listeners: Array<(logs: LogEntry[]) => void> = [];
 
   // Register a listener to receive log updates
-  registerListener(listener: (logs: LogEntry[]) => void) {
+  async registerListener(listener: (logs: LogEntry[]) => void) {
     this.listeners.push(listener);
     // Send current logs to the new listener
-    listener(this.logs);
+    const logs = await this.getLogs();
+    listener(logs);
   }
 
   // Unregister a listener
@@ -26,60 +28,75 @@ class LogService {
     }
   }
 
-  // Add a log entry
-  private addLogEntry(type: string, message: string, details?: any) {
-    const newLog: LogEntry = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      timestamp: new Date(),
-      type,
-      message,
-      details
-    };
-    
-    this.logs.push(newLog);
-    
-    // Notify all listeners
-    this.listeners.forEach(listener => {
-      listener(this.logs);
-    });
+  // Add a log entry via Rust
+  async addLogEntry(type: string, message: string, details?: any) {
+    try {
+      await invoke('add_log_entry', { type, message, details });
+      // Notify all listeners with updated logs
+      const logs = await this.getLogs();
+      this.notifyListeners(logs);
+    } catch (error) {
+      console.error('Failed to add log entry:', error);
+      throw error;
+    }
   }
 
-  // Get all log entries
-  getLogs(): LogEntry[] {
-    return [...this.logs];
+  // Get all log entries via Rust
+  async getLogs(): Promise<LogEntry[]> {
+    try {
+      const logs = await invoke<LogEntry[]>('get_logs');
+      return logs.map(log => ({
+        ...log,
+        timestamp: new Date(log.timestamp)
+      }));
+    } catch (error) {
+      console.error('Failed to get logs:', error);
+      return [];
+    }
   }
 
-  // Clear all log entries
-  clearLogs() {
-    this.logs = [];
+  // Clear all log entries via Rust
+  async clearLogs() {
+    try {
+      await invoke('clear_logs');
+      // Notify all listeners with empty logs
+      this.notifyListeners([]);
+    } catch (error) {
+      console.error('Failed to clear logs:', error);
+      throw error;
+    }
+  }
+
+  // Notify all listeners
+  private notifyListeners(logs: LogEntry[]) {
     this.listeners.forEach(listener => {
-      listener(this.logs);
+      listener(logs);
     });
   }
 
   // Log chat sent event
-  logChatSent(message: string, details?: any) {
-    this.addLogEntry('chat_sent', `Chat message sent: ${message}`, details);
+  async logChatSent(message: string, details?: any) {
+    await this.addLogEntry('chat_sent', `Chat message sent: ${message}`, details);
   }
 
   // Log chat response received event
-  logChatResponse(response: string, details?: any) {
-    this.addLogEntry('chat_response', `Chat response received: ${response}`, details);
+  async logChatResponse(response: string, details?: any) {
+    await this.addLogEntry('chat_response', `Chat response received: ${response}`, details);
   }
 
   // Log TTS response received event
-  logTTSResponse(details?: any) {
-    this.addLogEntry('tts_response', 'TTS response received', details);
+  async logTTSResponse(details?: any) {
+    await this.addLogEntry('tts_response', 'TTS response received', details);
   }
 
   // Log info event
-  logInfo(message: string, details?: any) {
-    this.addLogEntry('info', message, details);
+  async logInfo(message: string, details?: any) {
+    await this.addLogEntry('info', message, details);
   }
 
   // Log error event
-  logError(message: string, details?: any) {
-    this.addLogEntry('error', message, details);
+  async logError(message: string, details?: any) {
+    await this.addLogEntry('error', message, details);
   }
 }
 

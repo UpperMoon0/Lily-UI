@@ -42,32 +42,33 @@ class PersistenceService {
     }
   }
 
-  // Save chat history to localStorage (runtime persistence)
-  saveChatHistory(messages: any[]): void {
+  // Save chat history to file via Rust
+  async saveChatHistory(messages: any[]): Promise<void> {
     try {
-      localStorage.setItem('lily_chat_history', JSON.stringify(messages));
+      await invoke('save_chat_history', { messages });
     } catch (error) {
-      console.error('Failed to save chat history to localStorage:', error);
+      console.error('Failed to save chat history:', error);
+      throw error;
     }
   }
 
-  // Load chat history from localStorage (runtime persistence)
-  loadChatHistory(): any[] {
+  // Load chat history from file via Rust
+  async loadChatHistory(): Promise<any[]> {
     try {
-      const history = localStorage.getItem('lily_chat_history');
-      return history ? JSON.parse(history) : [];
+      return await invoke('load_chat_history');
     } catch (error) {
-      console.error('Failed to load chat history from localStorage:', error);
+      console.error('Failed to load chat history:', error);
       return [];
     }
   }
 
-  // Clear chat history from localStorage
-  clearChatHistory(): void {
+  // Clear chat history via Rust
+  async clearChatHistory(): Promise<void> {
     try {
-      localStorage.removeItem('lily_chat_history');
+      await invoke('clear_chat_history');
     } catch (error) {
-      console.error('Failed to clear chat history from localStorage:', error);
+      console.error('Failed to clear chat history:', error);
+      throw error;
     }
   }
 }
