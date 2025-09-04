@@ -27,10 +27,34 @@ interface MonitoringData {
   details?: Record<string, any>;
 }
 
+interface AgentStep {
+  step_number: number;
+  type: string;
+  reasoning: string;
+  tool_name: string;
+  tool_parameters: any;
+  tool_result: any;
+  timestamp: string;
+}
+
+interface AgentLoop {
+  exists: boolean;
+  user_id: string;
+  user_message: string;
+  final_response: string;
+  completed: boolean;
+  start_time: string;
+  end_time: string;
+  steps: AgentStep[];
+  message?: string;
+}
+
 const Monitor: React.FC = () => {
   const [monitoringData, setMonitoringData] = useState<MonitoringData | null>(null);
+  const [agentLoopData, setAgentLoopData] = useState<AgentLoop | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [agentLoopLoading, setAgentLoopLoading] = useState<boolean>(true);
 
   const fetchMonitoringData = async () => {
     setLoading(true); 
@@ -52,10 +76,34 @@ const Monitor: React.FC = () => {
     }
   };
 
+  const fetchAgentLoopData = async () => {
+    setAgentLoopLoading(true);
+    try {
+      const response = await fetch("http://localhost:8000/agent-loops");
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data: AgentLoop = await response.json();
+      setAgentLoopData(data);
+    } catch (err) {
+      console.error("Error fetching agent loop data:", err);
+      // Don't set error for agent loop to avoid blocking the main monitoring
+    } finally {
+      setAgentLoopLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchMonitoringData();
+    fetchAgentLoopData();
     const intervalId = setInterval(fetchMonitoringData, 5000);
-    return () => clearInterval(intervalId);
+    const agentLoopIntervalId = setInterval(fetchAgentLoopData, 3000);
+    return () => {
+      clearInterval(intervalId);
+      clearInterval(agentLoopIntervalId);
+    };
   }, []);
 
   const getStatusColor = (status: string) => {
@@ -210,6 +258,32 @@ const Monitor: React.FC = () => {
     );
   }
 
+  const formatStepIcon = (type: string) => {
+    switch (type) {
+      case "tool_call":
+        return "🛠️";
+      case "reasoning":
+        return "💭";
+      case "response":
+        return "💬";
+      default:
+        return "📝";
+    }
+  };
+
+  const formatStepType = (type: string) => {
+    switch (type) {
+      case "tool_call":
+        return "Tool Call";
+      case "reasoning":
+        return "Reasoning";
+      case "response":
+        return "Response";
+      default:
+        return type;
+    }
+  };
+
   return (
     <div className="monitor-container">
       <div className="monitor-header">
@@ -341,6 +415,80 @@ const Monitor: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Agent Loop Section */}
+          <div className="services-section">
+            <h2>Agent Loop</h2>
+            {agentLoopLoading ? (
+              <div className={styles.loadingContainer}>
+                <div className={styles.spinner}></div>
+                Loading agent loop data...
+              </div>
+            ) : agentLoopData && agentLoopData.exists ? (
+              <div className={styles.agentLoopContainer}>
+                <div className={styles.agentLoopHeader}>
+                  <h3>Last Agent Loop</h3>
+                  <div className={styles.agentLoopMeta}>
+                    <span><strong>User:</strong> {agentLoopData.user_id}</span>
+                    <span><strong>Started:</strong> {new Date(agentLoopData.start_time).toLocaleString()}</span>
+                    <span><strong>Completed:</strong> {agentLoopData.completed ? "Yes" : "No"}</span>
+                  </div>
+                </div>
+
+                <div className={styles.userMessage}>
+                  <strong>User Message:</strong> {agentLoopData.user_message}
+                </div>
+
+                <div className={styles.stepsContainer}>
+                  <h4>Steps:</h4>
+                  <div className={styles.stepsTimeline}>
+                    {agentLoopData.steps.map((step, index) => (
+                      <div key={index} className={styles.stepCard}>
+                        <div className={styles.stepHeader}>
+                          <span className={styles.stepIcon}>{formatStepIcon(step.type)}</span>
+                          <span className={styles.stepNumber}>Step {step.step_number}</span>
+                          <span className={styles.stepType}>{formatStepType(step.type)}</span>
+                        </div>
+                        
+                        <div className={styles.stepReasoning}>
+                          <strong>Reasoning:</strong> {step.reasoning}
+                        </div>
+
+                        {step.type === "tool_call" && (
+                          <div className={styles.toolDetails}>
+                            <div><strong>Tool:</strong> {step.tool_name}</div>
+                            {step.tool_parameters && Object.keys(step.tool_parameters).length > 0 && (
+                              <div><strong>Parameters:</strong> {JSON.stringify(step.tool_parameters, null, 2)}</div>
+                            )}
+                            {step.tool_result && (
+                              <div><strong>Result:</strong> {JSON.stringify(step.tool_result, null, 2)}</div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className={styles.stepTimestamp}>
+                          {new Date(step.timestamp).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {agentLoopData.completed && (
+                  <div className={styles.finalResponse}>
+                    <h4>Final Response:</h4>
+                    <div className={styles.responseText}>{agentLoopData.final_response}</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className={styles.noAgentLoop}>
+                <div className={styles.noAgentLoopIcon}>🤖</div>
+                <h3>No Agent Loops Yet</h3>
+                <p>Send a message in the chat to see the agent loop in action!</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
