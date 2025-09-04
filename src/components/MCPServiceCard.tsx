@@ -56,27 +56,73 @@ const MCPServiceCard: React.FC<MCPServiceCardProps> = ({ service, showStatus = t
         {/* Tools section */}
         {service.details && service.details.tools && (
           <div style={{ marginTop: "15px" }}>
-            <h4 style={{ marginBottom: "10px", color: "var(--text-primary)" }}>Available Tools</h4>
+            <h4 style={{ marginBottom: "10px", color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "1.1rem" }}>🛠️</span>
+              Available Tools ({service.details.tool_count || service.details.tools.split("|").length})
+            </h4>
             <div style={{
               backgroundColor: "var(--background-tertiary)",
-              borderRadius: "8px",
-              padding: "12px",
-              border: "1px solid var(--border-color)"
+              borderRadius: "12px",
+              padding: "16px",
+              border: "1px solid var(--border-color)",
+              display: "grid",
+              gap: "12px"
             }}>
-              {service.details.tools.split("|").map((toolInfo, toolIndex) => {
+              {service.details.tools.split("|").map((toolInfo: string, toolIndex: number) => {
                 const [name, description] = toolInfo.split(":");
                 return (
                   <div key={toolIndex} style={{
                     display: "flex",
                     alignItems: "flex-start",
-                    marginBottom: toolIndex === service.details.tools.split("|").length - 1 ? "0" : "10px"
+                    gap: "12px",
+                    padding: "12px",
+                    backgroundColor: "var(--background-secondary)",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color)",
+                    transition: "all 0.2s ease"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "var(--background-primary)";
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "var(--background-secondary)";
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "none";
                   }}>
-                    <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>🔧</span>
-                    <div>
-                      <strong style={{ color: "var(--text-primary)" }}>{name}</strong>
-                      <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", margin: "2px 0 0 0" }}>
-                        {description}
-                      </p>
+                    <div style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "8px",
+                      backgroundColor: "var(--accent-primary)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0
+                    }}>
+                      <span style={{ fontSize: "1.2rem", color: "white" }}>🔧</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <strong style={{
+                        color: "var(--text-primary)",
+                        fontSize: "1rem",
+                        display: "block",
+                        marginBottom: "4px"
+                      }}>
+                        {name}
+                      </strong>
+                      {description && (
+                        <p style={{
+                          color: "var(--text-secondary)",
+                          fontSize: "0.9rem",
+                          margin: 0,
+                          lineHeight: "1.4",
+                          opacity: 0.8
+                        }}>
+                          {description}
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
