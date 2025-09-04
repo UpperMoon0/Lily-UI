@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./Chat.css";
 import logService from "../services/LogService";
+import persistenceService from "../services/PersistenceService";
+import webSocketService from "../services/WebSocketService";
 
 interface Message {
   role: "user" | "assistant";
@@ -21,6 +23,8 @@ const Chat: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   // TTS state
@@ -53,22 +57,55 @@ const Chat: React.FC = () => {
     };
   }, [currentAudio]);
 
-  // Load conversation history and connect to WebSocket on component mount
+  // Load conversation history and set up WebSocket listeners on component mount
   useEffect(() => {
     loadConversationHistory();
+    loadPersistedData();
 
-    const ws = new WebSocket("ws://localhost:9002");
-
-    ws.onopen = () => {
-      console.log("WebSocket connection established");
-      ws.send("register:default_user");
-    };
-
-    ws.onmessage = (event) => {
+    // Set up WebSocket message listener
+    const handleWebSocketMessage = (event: any) => {
+      // Handle pong messages for health checking
+      if (event.data === "pong") {
+        // Connection is healthy
+        return;
+      }
+      
+      if (event.data === "registered") {
+        // Registration confirmation
+        setIsRegistered(true);
+        return;
+      }
+      
       if (event.data instanceof Blob) {
         const audioUrl = URL.createObjectURL(event.data);
         const audio = new Audio(audioUrl);
-        audio.play();
+        
+        // Set up audio event listeners
+        audio.onplay = () => {
+          setIsPlaying(true);
+          setCurrentAudio(audio);
+        };
+        
+        audio.onended = () => {
+          setIsPlaying(false);
+          setCurrentAudio(null);
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        audio.onerror = (error) => {
+          console.error("Audio playback error:", error);
+          setIsPlaying(false);
+          setCurrentAudio(null);
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        // Play the audio
+        audio.play().catch(error => {
+          console.error("Error playing audio:", error);
+          setIsPlaying(false);
+          setCurrentAudio(null);
+          URL.revokeObjectURL(audioUrl);
+        });
         
         // Log TTS response received event
         logService.logTTSResponse({
@@ -78,12 +115,26 @@ const Chat: React.FC = () => {
       }
     };
 
-    ws.onclose = () => {
-      console.log("WebSocket connection closed");
+    // Set up WebSocket connection status listener
+    const handleConnectionStatus = (connected: boolean) => {
+      setIsConnected(connected);
+      if (!connected) {
+        setIsRegistered(false);
+      }
     };
 
+    // Add listeners
+    webSocketService.addMessageListener(handleWebSocketMessage);
+    webSocketService.addConnectionListener(handleConnectionStatus);
+
+    // Set initial connection status
+    setIsConnected(webSocketService.getIsConnected());
+    setIsRegistered(webSocketService.getIsRegistered());
+
     return () => {
-      ws.close();
+      // Remove listeners
+      webSocketService.removeMessageListener(handleWebSocketMessage);
+      webSocketService.removeConnectionListener(handleConnectionStatus);
     };
   }, []);
 
@@ -105,6 +156,26 @@ const Chat: React.FC = () => {
     }
   };
 
+  // Load persisted data (TTS settings and chat history)
+  const loadPersistedData = async () => {
+    try {
+      // Load TTS settings
+      const savedSettings = await persistenceService.loadSettings();
+      if (savedSettings) {
+        setTtsEnabled(savedSettings.ttsEnabled);
+        setTtsParams(savedSettings.ttsParams);
+      }
+      
+      // Load chat history
+      const savedHistory = persistenceService.loadChatHistory();
+      if (savedHistory.length > 0) {
+        setMessages(savedHistory);
+      }
+    } catch (error) {
+      console.error("Error loading persisted data:", error);
+    }
+  };
+
 
   // Send message to Lily-Core API
   const sendMessage = async () => {
@@ -117,7 +188,12 @@ const Chat: React.FC = () => {
       timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => {
+      const newMessages = [...prev, userMessage];
+      // Save chat history whenever it changes
+      persistenceService.saveChatHistory(newMessages);
+      return newMessages;
+    });
     
     // Log chat sent event
     logService.logChatSent(inputValue);
@@ -160,7 +236,12 @@ const Chat: React.FC = () => {
         timestamp: data.timestamp,
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => {
+        const newMessages = [...prev, assistantMessage];
+        // Save chat history whenever it changes
+        persistenceService.saveChatHistory(newMessages);
+        return newMessages;
+      });
       
       // Log chat response received event
       logService.logChatResponse(data.response, {
@@ -177,7 +258,12 @@ const Chat: React.FC = () => {
         timestamp: new Date().toISOString(),
       };
 
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => {
+        const newMessages = [...prev, errorMessage];
+        // Save chat history whenever it changes
+        persistenceService.saveChatHistory(newMessages);
+        return newMessages;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -206,6 +292,8 @@ const Chat: React.FC = () => {
       
       if (response.ok) {
         setMessages([]);
+        // Clear persisted chat history
+        persistenceService.clearChatHistory();
         // Stop any playing audio
         if (currentAudio) {
           currentAudio.pause();
@@ -220,10 +308,27 @@ const Chat: React.FC = () => {
 
   // Handle TTS parameter changes
   const handleTtsParamChange = (param: keyof TTSParameters, value: string | number) => {
-    setTtsParams(prev => ({
-      ...prev,
+    const newParams = {
+      ...ttsParams,
       [param]: value
-    }));
+    };
+    setTtsParams(newParams);
+    
+    // Save settings whenever they change
+    persistenceService.saveSettings(newParams, ttsEnabled).catch(error => {
+      console.error("Failed to save TTS settings:", error);
+    });
+  };
+
+  // Handle TTS enabled toggle
+  const handleTtsToggle = () => {
+    const newEnabled = !ttsEnabled;
+    setTtsEnabled(newEnabled);
+    
+    // Save settings whenever they change
+    persistenceService.saveSettings(ttsParams, newEnabled).catch(error => {
+      console.error("Failed to save TTS settings:", error);
+    });
   };
 
   return (
@@ -234,7 +339,7 @@ const Chat: React.FC = () => {
           <p>A dynamic and intuitive chat interface for seamless communication.</p>
         </div>
         <div className="header-controls">
-          <button className="tts-toggle" onClick={() => setTtsEnabled(!ttsEnabled)}>
+          <button className="tts-toggle" onClick={handleTtsToggle}>
             TTS: {ttsEnabled ? "ON" : "OFF"}
           </button>
           <button className="tts-settings" onClick={() => setShowTtsSettings(!showTtsSettings)}>
@@ -244,6 +349,17 @@ const Chat: React.FC = () => {
             Clear Chat
           </button>
         </div>
+      </div>
+      
+      {/* Connection status indicator */}
+      <div className="connection-status">
+        {isConnected ? (
+          <span className="status-connected">
+            ● Connected {isRegistered ? "(Registered)" : "(Not Registered)"}
+          </span>
+        ) : (
+          <span className="status-disconnected">● Disconnected</span>
+        )}
       </div>
       
       {showTtsSettings && (

@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import "./App.css";
 import Sidebar from "./components/Sidebar";
 import Chat from "./components/Chat";
 import Monitor from "./components/Monitor";
 import Log from "./components/Log";
+import webSocketService from "./services/WebSocketService";
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -12,6 +13,17 @@ function App() {
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
+
+  // Initialize WebSocket connection when app starts
+  useEffect(() => {
+    // Connect to WebSocket server
+    webSocketService.connect();
+
+    // Cleanup function to disconnect when app closes
+    return () => {
+      webSocketService.disconnect();
+    };
+  }, []);
 
   return (
     <div className="app">

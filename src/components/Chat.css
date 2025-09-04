@@ -1,3 +1,18 @@
+.connection-status {
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-connected {
+  color: #4CAF50;
+}
+
+.status-disconnected {
+  color: #f44336;
+}
+
 .audio-controls {
   margin-top: 8px;
 }

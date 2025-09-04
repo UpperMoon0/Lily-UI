@@ -11,28 +11,21 @@ interface LogEntry {
 }
 
 const Log: React.FC = () => {
+  const [allLogs, setAllLogs] = useState<LogEntry[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Register with log service on mount
   useEffect(() => {
-    logService.registerLogComponent({
-      addLogEntry: (type: LogEntry["type"], message: string, details?: any) => {
-        const newLog: LogEntry = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-          timestamp: new Date(),
-          type,
-          message,
-          details
-        };
-        
-        setLogs(prevLogs => [...prevLogs, newLog]);
-      }
-    });
+    const listener = (updatedLogs: LogEntry[]) => {
+      setAllLogs(updatedLogs);
+    };
+    
+    logService.registerListener(listener);
 
     return () => {
-      logService.unregisterLogComponent();
+      logService.unregisterListener(listener);
     };
   }, []);
 
@@ -48,13 +41,16 @@ const Log: React.FC = () => {
 
   // Function to clear all logs
   const clearLogs = () => {
-    setLogs([]);
+    logService.clearLogs();
   };
 
   // Filter logs based on selected filter
-  const filteredLogs = filter === "all" 
-    ? logs 
-    : logs.filter(log => log.type === filter);
+  useEffect(() => {
+    const filtered = filter === "all"
+      ? allLogs
+      : allLogs.filter(log => log.type === filter);
+    setLogs(filtered);
+  }, [allLogs, filter]);
 
   // Format timestamp for display
   const formatTimestamp = (timestamp: Date) => {
@@ -117,13 +113,13 @@ const Log: React.FC = () => {
       </div>
       
       <div className="log-content">
-        {filteredLogs.length === 0 ? (
+        {logs.length === 0 ? (
           <div className="log-empty">
             <p>No log entries yet. Events will appear here as they occur.</p>
           </div>
         ) : (
           <div className="log-entries">
-            {filteredLogs.map((log) => (
+            {logs.map((log) => (
               <div key={log.id} className={`log-entry ${getLogTypeClass(log.type)}`}>
                 <div className="log-timestamp">
                   {formatTimestamp(log.timestamp)}

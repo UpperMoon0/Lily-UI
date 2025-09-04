@@ -1,22 +1,60 @@
 // LogService.ts
-class LogService {
-  private logComponent: any = null;
+interface LogEntry {
+  id: string;
+  timestamp: Date;
+  type: string;
+  message: string;
+  details?: any;
+}
 
-  // Register the log component to receive log entries
-  registerLogComponent(component: any) {
-    this.logComponent = component;
+class LogService {
+  private logs: LogEntry[] = [];
+  private listeners: Array<(logs: LogEntry[]) => void> = [];
+
+  // Register a listener to receive log updates
+  registerListener(listener: (logs: LogEntry[]) => void) {
+    this.listeners.push(listener);
+    // Send current logs to the new listener
+    listener(this.logs);
   }
 
-  // Unregister the log component
-  unregisterLogComponent() {
-    this.logComponent = null;
+  // Unregister a listener
+  unregisterListener(listener: (logs: LogEntry[]) => void) {
+    const index = this.listeners.indexOf(listener);
+    if (index !== -1) {
+      this.listeners.splice(index, 1);
+    }
   }
 
   // Add a log entry
-  addLogEntry(type: string, message: string, details?: any) {
-    if (this.logComponent && typeof this.logComponent.addLogEntry === 'function') {
-      this.logComponent.addLogEntry(type, message, details);
-    }
+  private addLogEntry(type: string, message: string, details?: any) {
+    const newLog: LogEntry = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      timestamp: new Date(),
+      type,
+      message,
+      details
+    };
+    
+    this.logs.push(newLog);
+    
+    // Notify all listeners
+    this.listeners.forEach(listener => {
+      listener(this.logs);
+    });
+  }
+
+  // Get all log entries
+  getLogs(): LogEntry[] {
+    return [...this.logs];
+  }
+
+  // Clear all log entries
+  clearLogs() {
+    this.logs = [];
+    this.listeners.forEach(listener => {
+      listener(this.logs);
+    });
   }
 
   // Log chat sent event
