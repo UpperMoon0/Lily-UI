@@ -69,42 +69,51 @@ const Chat: React.FC = () => {
 
     // Listen for WebSocket binary events (audio data)
     const audioListenerPromise = listen('websocket-binary', (event: { payload: Uint8Array }) => {
-      const blob = new Blob([event.payload], { type: 'audio/wav' });
-      const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-      
-      // Set up audio event listeners
-      audio.onplay = () => {
-        setIsPlaying(true);
-        setCurrentAudio(audio);
-      };
-      
-      audio.onended = () => {
-        setIsPlaying(false);
-        setCurrentAudio(null);
-        URL.revokeObjectURL(audioUrl);
-      };
-      
-      audio.onerror = (error) => {
-        console.error("Audio playback error:", error);
-        setIsPlaying(false);
-        setCurrentAudio(null);
-        URL.revokeObjectURL(audioUrl);
-      };
-      
-      // Play the audio
-      audio.play().catch(error => {
-        console.error("Error playing audio:", error);
-        setIsPlaying(false);
-        setCurrentAudio(null);
-        URL.revokeObjectURL(audioUrl);
-      });
-      
-      // Log TTS response received event
-      logService.logTTSResponse({
-        size: blob.size,
-        type: blob.type
-      });
+      console.log("WebSocket binary event received, payload size:", event.payload.length);
+      try {
+        // Convert to standard Uint8Array to avoid type issues
+        const audioData = new Uint8Array(event.payload);
+        const blob = new Blob([audioData], { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
+        
+        // Set up audio event listeners
+        audio.onplay = () => {
+          console.log("Audio playback started");
+          setIsPlaying(true);
+          setCurrentAudio(audio);
+        };
+        
+        audio.onended = () => {
+          console.log("Audio playback ended");
+          setIsPlaying(false);
+          setCurrentAudio(null);
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        audio.onerror = (error) => {
+          console.error("Audio playback error:", error);
+          setIsPlaying(false);
+          setCurrentAudio(null);
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        // Play the audio
+        audio.play().catch(error => {
+          console.error("Error playing audio:", error);
+          setIsPlaying(false);
+          setCurrentAudio(null);
+          URL.revokeObjectURL(audioUrl);
+        });
+        
+        // Log TTS response received event
+        logService.logTTSResponse({
+          size: blob.size,
+          type: blob.type
+        });
+      } catch (error) {
+        console.error("Error processing audio data:", error);
+      }
     }).then(unsubscribe => unsubscribe);
 
     unsubscribePromises.push(audioListenerPromise);
@@ -136,6 +145,15 @@ const Chat: React.FC = () => {
       setMessages(historyMessages);
     } catch (error) {
       console.error("Error loading conversation history:", error);
+      // If backend is unavailable, fall back to local chat history
+      try {
+        const localHistory = await persistenceService.loadChatHistory();
+        if (localHistory.length > 0) {
+          setMessages(localHistory);
+        }
+      } catch (localError) {
+        console.error("Failed to load local chat history:", localError);
+      }
     }
   };
 
@@ -150,7 +168,7 @@ const Chat: React.FC = () => {
       }
       
       // Load chat history
-      const savedHistory = persistenceService.loadChatHistory();
+      const savedHistory = await persistenceService.loadChatHistory();
       if (savedHistory.length > 0) {
         setMessages(savedHistory);
       }
@@ -185,11 +203,12 @@ const Chat: React.FC = () => {
 
     try {
       // Send message via Rust command
-      const data = await invoke<{ response: string; timestamp: string }>('send_chat_message', {
+      const invokeParams = {
         message: inputValue,
-        tts_enabled: ttsEnabled,
-        tts_params: ttsEnabled ? ttsParams : undefined
-      });
+        ttsEnabled: ttsEnabled,
+        ...(ttsEnabled ? { ttsParams: ttsParams } : {})
+      };
+      const data = await invoke<{ response: string; timestamp: string }>('send_chat_message', invokeParams);
 
       // Add assistant message to UI
       const assistantMessage: Message = {
@@ -210,13 +229,23 @@ const Chat: React.FC = () => {
         timestamp: data.timestamp,
         user_id: "default_user"
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending message:", error);
+      
+      let errorContent = "Sorry, I encountered an error while processing your request. Please try again.";
+      
+      // Check if it's a backend connectivity issue
+      if (error.toString().includes("404") || error.toString().includes("Failed to send request")) {
+        errorContent = "Backend service is unavailable. Please make sure Lily-Core is running on localhost:8000.";
+      } else if (error.toString().includes("ttsEnabled")) {
+        // Handle parameter serialization issues
+        errorContent = "Configuration error. Please check your TTS settings and try again.";
+      }
       
       // Add error message to UI
       const errorMessage: Message = {
         role: "assistant",
-        content: "Sorry, I encountered an error while processing your request. Please try again.",
+        content: errorContent,
         timestamp: new Date().toISOString(),
       };
 
