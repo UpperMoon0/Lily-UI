@@ -4,7 +4,6 @@ import "./App.css";
 import Sidebar from "./components/Sidebar";
 import Chat from "./components/Chat";
 import Monitor from "./components/Monitor";
-import Log from "./components/Log";
 import webSocketService from "./services/WebSocketService";
 
 function App() {
@@ -38,7 +37,6 @@ function App() {
         <Routes>
           <Route path="/" element={<Chat />} />
           <Route path="/monitor" element={<Monitor />} />
-          <Route path="/log" element={<Log />} />
         </Routes>
       </div>
     </div>

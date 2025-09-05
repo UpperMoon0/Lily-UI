@@ -1,6 +1,7 @@
 use crate::domain::models::{AppSettings, ChatMessage, LogEntry};
 use serde_json;
 use tauri::AppHandle;
+use std::future::Future;
 
 pub trait FileStorageTrait {
     fn save_settings(settings: AppSettings) -> Result<(), String>;
@@ -14,7 +15,7 @@ pub trait FileStorageTrait {
 }
 
 pub trait WebSocketTrait {
-    async fn connect(app_handle: AppHandle) -> Result<(), String>;
-    async fn disconnect(app_handle: AppHandle) -> Result<(), String>;
-    async fn send_message(message: String, app_handle: AppHandle) -> Result<(), String>;
+    fn connect(app_handle: AppHandle) -> impl Future<Output = Result<(), String>> + Send;
+    fn disconnect(app_handle: AppHandle) -> impl Future<Output = Result<(), String>> + Send;
+    fn send_message(message: String, app_handle: AppHandle) -> impl Future<Output = Result<(), String>> + Send;
 }

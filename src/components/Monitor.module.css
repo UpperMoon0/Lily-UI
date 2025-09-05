@@ -1,3 +1,42 @@
+/* Tab Navigation Styles */
+.tabContainer {
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tabNav {
+  display: flex;
+  gap: 5px;
+  padding: 0 20px;
+}
+
+.tabButton {
+  background-color: var(--background-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  top: 1px;
+}
+
+.tabButton:hover {
+  background-color: var(--background-tertiary);
+  color: var(--text-primary);
+}
+
+.tabButton.activeTab {
+  background-color: var(--background-primary);
+  color: var(--accent-color);
+  border-color: var(--accent-color);
+  border-bottom: 1px solid var(--background-primary);
+}
+
 .errorContainer {
   text-align: center;
   padding: 40px;
@@ -22,12 +61,14 @@
   color: #b0b0b0; /* Lighter gray for paragraph */
   margin-bottom: 20px;
 }
+
 .loadingContainer {
   text-align: center;
   padding: 40px;
   color: #e0e0e0;
   font-size: 18px;
 }
+
 .spinner {
   border: 4px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
@@ -182,6 +223,190 @@
 
   .serverCard:hover {
     transform: none;
+  }
+  
+  .tabNav {
+    padding: 0 10px;
+  }
+  
+  .tabButton {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Log Styles */
+.logControls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: var(--background-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.logFilter {
+  background-color: var(--background-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.logFilter:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.clearButton {
+  background-color: var(--background-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.clearButton:hover:not(:disabled) {
+  background-color: var(--error-color);
+  border-color: var(--error-color);
+  transform: translateY(-2px);
+}
+
+.logContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--background-primary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.logEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: 100%;
+  padding: 40px;
+  color: var(--text-secondary);
+}
+
+.logEmpty p {
+  font-size: 1.1rem;
+  max-width: 600px;
+  line-height: 1.6;
+}
+
+.logEntries {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.logEntry {
+  display: flex;
+  padding: 16px;
+  border-radius: 12px;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: fadeIn 0.3s ease;
+}
+
+.logTimestamp {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  min-width: 70px;
+  padding-right: 15px;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logIcon {
+  font-size: 1.2rem;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+}
+
+.logMessage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.logMessageText {
+  font-size: 1rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.logDetails {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  background-color: var(--background-tertiary);
+  padding: 10px;
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Log type specific styling */
+.log-chat-sent {
+  border-left: 4px solid #2962ff;
+}
+
+.log-chat-response {
+  border-left: 4px solid #00c853;
+}
+
+.log-tts-response {
+  border-left: 4px solid #ff6d00;
+}
+
+.log-info {
+  border-left: 4px solid var(--accent-color);
+}
+
+.log-error {
+  border-left: 4px solid var(--error-color);
+}
+
+@media (max-width: 768px) {
+  .logControls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .logEntry {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .logTimestamp {
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    padding-right: 0;
   }
 }
 

@@ -6,11 +6,11 @@
 }
 
 .status-connected {
-  color: #4CAF50;
+  color: var(--success-color);
 }
 
 .status-disconnected {
-  color: #f44336;
+  color: var(--error-color);
 }
 
 .audio-controls {
@@ -18,7 +18,7 @@
 }
 
 .play-audio-button {
-  background-color: #4CAF50;
+  background-color: var(--success-color);
   border: none;
   color: white;
   padding: 6px 12px;
@@ -36,7 +36,8 @@
 }
 
 .play-audio-button:disabled {
-  background-color: #cccccc;
+  background-color: var(--background-tertiary);
+  color: var(--text-secondary);
   cursor: not-allowed;
 }
 
