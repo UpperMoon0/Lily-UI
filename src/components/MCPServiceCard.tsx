@@ -69,7 +69,9 @@ const MCPServiceCard: React.FC<MCPServiceCardProps> = ({ service, showStatus = t
               gap: "12px"
             }}>
               {service.details.tools.split("|").map((toolInfo: string, toolIndex: number) => {
-                const [name, description] = toolInfo.split(":");
+                const parts = toolInfo.split(":");
+                const name = parts[0] || "Unnamed Tool";
+                const description = parts[1] || "";
                 return (
                   <div key={toolIndex} style={{
                     display: "flex",
@@ -112,17 +114,15 @@ const MCPServiceCard: React.FC<MCPServiceCardProps> = ({ service, showStatus = t
                       }}>
                         {name}
                       </strong>
-                      {description && (
-                        <p style={{
-                          color: "var(--text-secondary)",
-                          fontSize: "0.9rem",
-                          margin: 0,
-                          lineHeight: "1.4",
-                          opacity: 0.8
-                        }}>
-                          {description}
-                        </p>
-                      )}
+                      <p style={{
+                        color: "var(--text-secondary)",
+                        fontSize: "0.9rem",
+                        margin: 0,
+                        lineHeight: "1.4",
+                        opacity: description ? 0.8 : 0.5
+                      }}>
+                        {description || "No description available"}
+                      </p>
                     </div>
                   </div>
                 );
