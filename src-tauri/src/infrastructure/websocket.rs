@@ -61,6 +61,19 @@ impl WebSocketTrait for WebSocketService {
         }
     }
 
+    async fn send_binary_data(data: Vec<u8>, app_handle: AppHandle) -> Result<(), String> {
+        let state = app_handle.state::<AppState>();
+        let mut ws_state = state.ws_state.lock().await;
+        
+        if let Some(stream) = &mut ws_state.stream.as_mut() {
+            stream.send(Message::Binary(data)).await
+                .map_err(|e| format!("Failed to send binary data: {}", e))?;
+            Ok(())
+        } else {
+            Err("WebSocket not connected".to_string())
+        }
+    }
+
 }
 
 impl WebSocketService {

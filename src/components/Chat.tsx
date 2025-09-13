@@ -39,6 +39,11 @@ const Chat: React.FC = () => {
   });
   const [showTtsSettings, setShowTtsSettings] = useState(false);
 
+  // Conversation mode state
+  const [conversationMode, setConversationMode] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+
   // Scroll to bottom of messages
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -56,8 +61,12 @@ const Chat: React.FC = () => {
         setCurrentAudio(null);
         setIsPlaying(false);
       }
+      // Clean up conversation mode
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
     };
-  }, [currentAudio]);
+  }, [currentAudio, mediaRecorder]);
 
   // Load conversation history and set up event listeners on component mount
   useEffect(() => {
@@ -174,6 +183,57 @@ const Chat: React.FC = () => {
       }
     } catch (error) {
       console.error("Error loading persisted data:", error);
+    }
+  };
+
+  // Handle conversation mode toggle
+  const toggleConversationMode = async () => {
+    if (conversationMode) {
+      // Stop recording
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
+      setConversationMode(false);
+      setMediaRecorder(null);
+      setAudioChunks([]);
+    } else {
+      // Start recording
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            setAudioChunks((prev) => [...prev, event.data]);
+            // Send audio chunk via WebSocket
+            sendAudioChunk(event.data);
+          }
+        };
+        
+        recorder.onstop = () => {
+          stream.getTracks().forEach(track => track.stop());
+        };
+        
+        setMediaRecorder(recorder);
+        setConversationMode(true);
+        recorder.start(1000); // Capture chunks every second
+      } catch (error) {
+        console.error("Error accessing microphone:", error);
+        alert("Microphone access denied. Please allow microphone permissions to use conversation mode.");
+      }
+    }
+  };
+
+  // Send audio chunk via WebSocket
+  const sendAudioChunk = async (audioBlob: Blob) => {
+    try {
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioData = new Uint8Array(arrayBuffer);
+      
+      // Send via WebSocket using Rust backend
+      await invoke('send_websocket_audio', { audioData: Array.from(audioData) });
+    } catch (error) {
+      console.error("Error sending audio chunk:", error);
     }
   };
 
@@ -325,6 +385,9 @@ const Chat: React.FC = () => {
           <p>A dynamic and intuitive chat interface for seamless communication.</p>
         </div>
         <div className="header-controls">
+          <button className={`conversation-mode-toggle ${conversationMode ? 'active' : ''}`} onClick={toggleConversationMode}>
+            🎤 {conversationMode ? "Stop" : "Talk"}
+          </button>
           <button className="tts-toggle" onClick={handleTtsToggle}>
             TTS: {ttsEnabled ? "ON" : "OFF"}
           </button>
@@ -347,6 +410,13 @@ const Chat: React.FC = () => {
           <span className="status-disconnected">● Disconnected</span>
         )}
       </div>
+
+      {/* Conversation mode status */}
+      {conversationMode && (
+        <div className="conversation-status">
+          <span className="status-recording">● Recording audio... Speak now</span>
+        </div>
+      )}
       
       {showTtsSettings && (
         <div className="tts-settings-panel">

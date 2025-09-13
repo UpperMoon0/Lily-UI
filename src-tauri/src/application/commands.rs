@@ -174,3 +174,8 @@ pub async fn get_monitoring_data() -> Result<serde_json::Value, String> {
 
     Ok(data)
 }
+
+#[tauri::command]
+pub async fn send_websocket_audio(audio_data: Vec<u8>, app_handle: AppHandle) -> Result<(), String> {
+    WebSocketService::send_binary_data(audio_data, app_handle).await
+}

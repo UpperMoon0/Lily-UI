@@ -18,4 +18,5 @@ pub trait WebSocketTrait {
     fn connect(app_handle: AppHandle) -> impl Future<Output = Result<(), String>> + Send;
     fn disconnect(app_handle: AppHandle) -> impl Future<Output = Result<(), String>> + Send;
     fn send_message(message: String, app_handle: AppHandle) -> impl Future<Output = Result<(), String>> + Send;
+    fn send_binary_data(data: Vec<u8>, app_handle: AppHandle) -> impl Future<Output = Result<(), String>> + Send;
 }
