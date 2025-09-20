@@ -38,11 +38,21 @@ const Chat: React.FC = () => {
     lang: "en-US"
   });
   const [showTtsSettings, setShowTtsSettings] = useState(false);
+  
+  // Audio device state
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [inputDeviceId, setInputDeviceId] = useState<string>('');
+  const [outputDeviceId, setOutputDeviceId] = useState<string>('');
 
   // Conversation mode state
   const [conversationMode, setConversationMode] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [isAudioActive, setIsAudioActive] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number>(0);
+  const activityTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -64,6 +74,16 @@ const Chat: React.FC = () => {
       // Clean up conversation mode
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
+      }
+      // Clean up audio analysis
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (activityTimeoutRef.current) {
+        clearTimeout(activityTimeoutRef.current);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
     };
   }, [currentAudio, mediaRecorder]);
@@ -148,6 +168,11 @@ const Chat: React.FC = () => {
     };
   }, []);
 
+  // Enumerate audio devices on component mount
+  useEffect(() => {
+    enumerateAudioDevices();
+  }, []);
+
   const loadConversationHistory = async () => {
     try {
       const historyMessages = await invoke<Message[]>('get_conversation_history');
@@ -169,11 +194,20 @@ const Chat: React.FC = () => {
   // Load persisted data (TTS settings and chat history)
   const loadPersistedData = async () => {
     try {
-      // Load TTS settings
+      // Load all settings
       const savedSettings = await persistenceService.loadSettings();
       if (savedSettings) {
+        // Load TTS settings
         setTtsEnabled(savedSettings.ttsEnabled);
         setTtsParams(savedSettings.ttsParams);
+        
+        // Load audio device settings
+        if (savedSettings.inputDeviceId) {
+          setInputDeviceId(savedSettings.inputDeviceId);
+        }
+        if (savedSettings.outputDeviceId) {
+          setOutputDeviceId(savedSettings.outputDeviceId);
+        }
       }
       
       // Load chat history
@@ -183,6 +217,42 @@ const Chat: React.FC = () => {
       }
     } catch (error) {
       console.error("Error loading persisted data:", error);
+    }
+  };
+
+  // Enumerate audio devices
+  const enumerateAudioDevices = async () => {
+    try {
+      // Request permissions if needed
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Enumerate devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioDevices = devices.filter(device =>
+        device.kind === 'audioinput' || device.kind === 'audiooutput'
+      );
+      setAudioDevices(audioDevices);
+      
+      // Set default devices if not already set
+      if (!inputDeviceId) {
+        const defaultInput = audioDevices.find(device =>
+          device.kind === 'audioinput' && device.deviceId === 'default'
+        ) || audioDevices.find(device => device.kind === 'audioinput');
+        if (defaultInput) {
+          setInputDeviceId(defaultInput.deviceId);
+        }
+      }
+      
+      if (!outputDeviceId) {
+        const defaultOutput = audioDevices.find(device =>
+          device.kind === 'audiooutput' && device.deviceId === 'default'
+        ) || audioDevices.find(device => device.kind === 'audiooutput');
+        if (defaultOutput) {
+          setOutputDeviceId(defaultOutput.deviceId);
+        }
+      }
+    } catch (error) {
+      console.error("Error enumerating audio devices:", error);
     }
   };
 
@@ -196,27 +266,54 @@ const Chat: React.FC = () => {
       setConversationMode(false);
       setMediaRecorder(null);
       setAudioChunks([]);
+      setIsAudioActive(false);
+      // Clean up audio analysis
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (activityTimeoutRef.current) {
+        clearTimeout(activityTimeoutRef.current);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
     } else {
       // Start recording
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("Requesting microphone access with constraints:", inputDeviceId ? { audio: { deviceId: inputDeviceId } } : { audio: true });
+        const constraints = inputDeviceId
+          ? { audio: { deviceId: inputDeviceId } }
+          : { audio: true };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log("Microphone access granted, stream active:", stream.active);
         const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        console.log("MediaRecorder created with state:", recorder.state);
         
         recorder.ondataavailable = (event) => {
           if (event.data.size > 0) {
+            console.log("Audio data available, size:", event.data.size);
             setAudioChunks((prev) => [...prev, event.data]);
             // Send audio chunk via WebSocket
             sendAudioChunk(event.data);
+          } else {
+            console.log("Empty audio data chunk received");
           }
         };
         
         recorder.onstop = () => {
+          console.log("MediaRecorder stopped");
           stream.getTracks().forEach(track => track.stop());
         };
         
         setMediaRecorder(recorder);
         setConversationMode(true);
+        console.log("Starting MediaRecorder with 1000ms timeslice");
         recorder.start(1000); // Capture chunks every second
+        console.log("MediaRecorder started with state:", recorder.state);
+        
+        // Set up audio analysis for visual feedback
+        setupAudioAnalysis(stream);
       } catch (error) {
         console.error("Error accessing microphone:", error);
         alert("Microphone access denied. Please allow microphone permissions to use conversation mode.");
@@ -227,16 +324,78 @@ const Chat: React.FC = () => {
   // Send audio chunk via WebSocket
   const sendAudioChunk = async (audioBlob: Blob) => {
     try {
+      console.log("Preparing to send audio chunk, size:", audioBlob.size);
+      console.log("WebSocket connection status - Connected:", isConnected, "Registered:", isRegistered);
+      
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioData = new Uint8Array(arrayBuffer);
+      console.log("Audio data converted, length:", audioData.length);
       
       // Send via WebSocket using Rust backend
+      console.log("Invoking send_websocket_audio command");
       await invoke('send_websocket_audio', { audioData: Array.from(audioData) });
+      console.log("Audio chunk sent successfully");
     } catch (error) {
       console.error("Error sending audio chunk:", error);
+      console.error("WebSocket connection status - Connected:", isConnected, "Registered:", isRegistered);
     }
   };
 
+  // Set up audio analysis for visual feedback
+  const setupAudioAnalysis = (stream: MediaStream) => {
+    try {
+      // Create audio context and analyser
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+      
+      source.connect(analyser);
+      analyser.fftSize = 256;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+      
+      // Start analysis
+      const detectAudio = () => {
+        if (!analyserRef.current) return;
+        
+        analyserRef.current.getByteFrequencyData(dataArray);
+        
+        // Calculate average volume
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / bufferLength;
+        console.log("Audio analysis - Average volume:", average);
+        
+        // Set audio active state based on volume threshold
+        const isActive = average > 10; // Adjust threshold as needed
+        console.log("Audio active state:", isActive);
+        setIsAudioActive(isActive);
+        
+        // Reset activity timeout
+        if (activityTimeoutRef.current) {
+          clearTimeout(activityTimeoutRef.current);
+        }
+        
+        // Set timeout to turn off activity indicator after a short delay
+        if (isActive) {
+          activityTimeoutRef.current = setTimeout(() => {
+            setIsAudioActive(false);
+          }, 500); // Show activity for at least 500ms
+        }
+        
+        animationFrameRef.current = requestAnimationFrame(detectAudio);
+      };
+      
+      animationFrameRef.current = requestAnimationFrame(detectAudio);
+    } catch (error) {
+      console.error("Error setting up audio analysis:", error);
+    }
+  };
 
   // Send message to Lily-Core API via Rust
   const sendMessage = async () => {
@@ -360,9 +519,29 @@ const Chat: React.FC = () => {
     };
     setTtsParams(newParams);
     
-    // Save settings whenever they change
-    persistenceService.saveSettings(newParams, ttsEnabled).catch(error => {
-      console.error("Failed to save TTS settings:", error);
+    // Save all settings whenever they change
+    persistenceService.saveSettings(newParams, ttsEnabled, inputDeviceId, outputDeviceId).catch(error => {
+      console.error("Failed to save settings:", error);
+    });
+  };
+
+  // Handle input device change
+  const handleInputDeviceChange = (deviceId: string) => {
+    setInputDeviceId(deviceId);
+    
+    // Save all settings whenever they change
+    persistenceService.saveSettings(ttsParams, ttsEnabled, deviceId, outputDeviceId).catch(error => {
+      console.error("Failed to save settings:", error);
+    });
+  };
+
+  // Handle output device change
+  const handleOutputDeviceChange = (deviceId: string) => {
+    setOutputDeviceId(deviceId);
+    
+    // Save all settings whenever they change
+    persistenceService.saveSettings(ttsParams, ttsEnabled, inputDeviceId, deviceId).catch(error => {
+      console.error("Failed to save settings:", error);
     });
   };
 
@@ -371,10 +550,20 @@ const Chat: React.FC = () => {
     const newEnabled = !ttsEnabled;
     setTtsEnabled(newEnabled);
     
-    // Save settings whenever they change
-    persistenceService.saveSettings(ttsParams, newEnabled).catch(error => {
-      console.error("Failed to save TTS settings:", error);
+    // Save all settings whenever they change
+    persistenceService.saveSettings(ttsParams, newEnabled, inputDeviceId, outputDeviceId).catch(error => {
+      console.error("Failed to save settings:", error);
     });
+  };
+  // Handle settings panel toggle
+  const toggleSettingsPanel = async () => {
+    const newShowSettings = !showTtsSettings;
+    setShowTtsSettings(newShowSettings);
+    
+    // Enumerate audio devices when opening the settings panel
+    if (newShowSettings) {
+      await enumerateAudioDevices();
+    }
   };
 
   return (
@@ -385,13 +574,10 @@ const Chat: React.FC = () => {
           <p>A dynamic and intuitive chat interface for seamless communication.</p>
         </div>
         <div className="header-controls">
-          <button className={`conversation-mode-toggle ${conversationMode ? 'active' : ''}`} onClick={toggleConversationMode}>
-            🎤 {conversationMode ? "Stop" : "Talk"}
-          </button>
           <button className="tts-toggle" onClick={handleTtsToggle}>
             TTS: {ttsEnabled ? "ON" : "OFF"}
           </button>
-          <button className="tts-settings" onClick={() => setShowTtsSettings(!showTtsSettings)}>
+          <button className="tts-settings" onClick={toggleSettingsPanel}>
             Settings
           </button>
           <button className="clear-button" onClick={clearConversation} disabled={messages.length === 0}>
@@ -411,10 +597,13 @@ const Chat: React.FC = () => {
         )}
       </div>
 
-      {/* Conversation mode status */}
+      {/* Audio activity indicator */}
       {conversationMode && (
-        <div className="conversation-status">
-          <span className="status-recording">● Recording audio... Speak now</span>
+        <div className="audio-activity-indicator">
+          <div className={`activity-light ${isAudioActive ? 'active' : ''}`}></div>
+          <span className="activity-label">
+            {isAudioActive ? 'Audio detected' : 'Listening...'}
+          </span>
         </div>
       )}
       
@@ -475,6 +664,40 @@ const Chat: React.FC = () => {
               <option value="zh-CN">Chinese</option>
             </select>
           </div>
+          
+          {/* Audio Device Settings */}
+          <h3>Audio Device Settings</h3>
+          <div className="setting-group">
+            <label>Input Device:</label>
+            <select
+              value={inputDeviceId}
+              onChange={(e) => handleInputDeviceChange(e.target.value)}
+            >
+              {audioDevices
+                .filter(device => device.kind === 'audioinput')
+                .map(device => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Microphone ${device.deviceId}`}
+                  </option>
+                ))}
+            </select>
+          </div>
+          
+          <div className="setting-group">
+            <label>Output Device:</label>
+            <select
+              value={outputDeviceId}
+              onChange={(e) => handleOutputDeviceChange(e.target.value)}
+            >
+              {audioDevices
+                .filter(device => device.kind === 'audiooutput')
+                .map(device => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Speaker ${device.deviceId}`}
+                  </option>
+                ))}
+            </select>
+          </div>
         </div>
       )}
       
@@ -531,6 +754,13 @@ const Chat: React.FC = () => {
             disabled={isLoading}
             rows={1}
           />
+          <button
+            type="button"
+            className={`mic-button ${conversationMode ? 'active' : ''}`}
+            onClick={toggleConversationMode}
+          >
+            🎤
+          </button>
           <button
             type="submit"
             disabled={isLoading || !inputValue.trim()}

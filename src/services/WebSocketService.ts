@@ -21,6 +21,7 @@ class WebSocketService {
       // Listen for WebSocket status events
       const unsubscribeStatus = await listen('websocket-status', (event: any) => {
         const status = event.payload;
+        console.log("WebSocketService: Status update - Connected:", status.connected, "Registered:", status.registered);
         this.isConnected = status.connected;
         this.isRegistered = status.registered;
         this.notifyConnectionListeners(this.isConnected);

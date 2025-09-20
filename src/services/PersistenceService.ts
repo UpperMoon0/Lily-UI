@@ -11,15 +11,24 @@ interface TTSParameters {
 interface AppSettings {
   tts_params: TTSParameters;
   tts_enabled: boolean;
+  input_device_id?: string;
+  output_device_id?: string;
 }
 
 class PersistenceService {
   // Save settings to file
-  async saveSettings(ttsParams: TTSParameters, ttsEnabled: boolean): Promise<void> {
+  async saveSettings(
+    ttsParams: TTSParameters,
+    ttsEnabled: boolean,
+    inputDeviceId?: string,
+    outputDeviceId?: string
+  ): Promise<void> {
     try {
       const settings: AppSettings = {
         tts_params: ttsParams,
-        tts_enabled: ttsEnabled
+        tts_enabled: ttsEnabled,
+        input_device_id: inputDeviceId,
+        output_device_id: outputDeviceId
       };
       await invoke('save_settings', { settings });
     } catch (error) {
@@ -29,12 +38,19 @@ class PersistenceService {
   }
 
   // Load settings from file
-  async loadSettings(): Promise<{ ttsParams: TTSParameters; ttsEnabled: boolean } | null> {
+  async loadSettings(): Promise<{
+    ttsParams: TTSParameters;
+    ttsEnabled: boolean;
+    inputDeviceId?: string;
+    outputDeviceId?: string;
+  } | null> {
     try {
       const settings = await invoke<AppSettings>('load_settings');
       return {
         ttsParams: settings.tts_params,
-        ttsEnabled: settings.tts_enabled
+        ttsEnabled: settings.tts_enabled,
+        inputDeviceId: settings.input_device_id,
+        outputDeviceId: settings.output_device_id
       };
     } catch (error) {
       console.error('Failed to load settings:', error);

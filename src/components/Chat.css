@@ -78,23 +78,127 @@
   background-color: #c53030;
 }
 
-/* Conversation status indicator */
-.conversation-status {
+/* Audio activity indicator */
+.audio-activity-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 8px 16px;
   text-align: center;
   font-size: 14px;
   font-weight: 500;
-  background-color: rgba(220, 38, 38, 0.1);
+  background-color: rgba(59, 130, 246, 0.1);
   border-bottom: 1px solid var(--border-color);
 }
 
-.status-recording {
-  color: var(--error-color);
-  animation: pulse 1.5s infinite;
+.activity-light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #94a3b8;
+  margin-right: 8px;
+  transition: all 0.2s ease;
 }
 
-@keyframes pulse {
+.activity-light.active {
+  background-color: var(--success-color);
+  box-shadow: 0 0 8px var(--success-color);
+  animation: pulse-glow 1s infinite;
+}
+
+.activity-label {
+  color: var(--text-primary);
+}
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 8px var(--success-color); }
+  50% { box-shadow: 0 0 16px var(--success-color); }
+  100% { box-shadow: 0 0 8px var(--success-color); }
+}
+
+/* Mic button styles */
+.mic-button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-left: 8px;
+  font-size: 1.2rem;
+}
+
+.mic-button:hover {
+  background-color: rgba(220, 38, 38, 0.1);
+  color: var(--error-color);
+}
+
+.mic-button.active {
+  color: var(--error-color);
+  animation: pulse-mic 1.5s infinite;
+}
+
+@keyframes pulse-mic {
   0% { opacity: 1; }
   50% { opacity: 0.7; }
   100% { opacity: 1; }
+}
+
+/* Settings panel */
+.tts-settings-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.tts-settings-panel h3 {
+  margin-top: 20px;
+  margin-bottom: 10px;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+}
+
+.tts-settings-panel h3:first-child {
+  margin-top: 0;
+}
+
+.setting-group {
+  margin-bottom: 15px;
+}
+
+.setting-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.setting-group select {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: var(--background-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.setting-group select:focus {
+  outline: none;
+  border-color: var(--accent-color);
 }
