@@ -63,12 +63,11 @@ impl WebSocketTrait for WebSocketService {
 
     async fn send_binary_data(data: Vec<u8>, app_handle: AppHandle) -> Result<(), String> {
         let state = app_handle.state::<AppState>();
-        let ws_state = state.ws_state.lock().await;
-        info!("Checking WebSocket connection status - Connected: {}, Registered: {}", 
+        let mut ws_state = state.ws_state.lock().await;
+        info!("Checking WebSocket connection status - Connected: {}, Registered: {}",
               ws_state.is_connected, ws_state.is_registered);
         
-        if let Some(stream) = &ws_state.stream.as_ref() {
-            drop(ws_state); // Release the lock before sending
+        if let Some(stream) = &mut ws_state.stream.as_mut() {
             info!("Sending binary data of size: {}", data.len());
             let result = stream.send(Message::Binary(data)).await
                 .map_err(|e| format!("Failed to send binary data: {}", e));
