@@ -39,7 +39,8 @@ pub fn run() {
             commands::get_conversation_history,
             commands::clear_conversation,
             commands::get_monitoring_data,
-            commands::send_websocket_audio
+            commands::send_websocket_audio,
+            commands::get_websocket_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

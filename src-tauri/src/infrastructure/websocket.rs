@@ -1,5 +1,5 @@
 use crate::domain::interfaces::WebSocketTrait;
-use crate::domain::models::{AppState, WebSocketState};
+use crate::domain::models::{AppState, WebSocketState, WebSocketStatus};
 use futures_util::{SinkExt, StreamExt};
 use log::{error, info};
 use tauri::{AppHandle, Emitter, Manager};
@@ -30,7 +30,8 @@ impl WebSocketTrait for WebSocketService {
         let state = app_handle.state::<AppState>();
         let mut ws_state = state.ws_state.lock().await;
         
-        if let Some(mut stream) = ws_state.stream.take() {
+        if let Some(stream_arc) = ws_state.stream.take() {
+            let mut stream = stream_arc.lock().await;
             let _ = stream.close(None).await;
         }
         
@@ -50,12 +51,12 @@ impl WebSocketTrait for WebSocketService {
 
     async fn send_message(message: String, app_handle: AppHandle) -> Result<(), String> {
         let state = app_handle.state::<AppState>();
-        let mut ws_state = state.ws_state.lock().await;
+        let ws_state = state.ws_state.lock().await;
         
-        if let Some(stream) = &mut ws_state.stream.as_mut() {
+        if let Some(stream_arc) = ws_state.stream.clone() {
+            let mut stream = stream_arc.lock().await;
             stream.send(Message::Text(message)).await
-                .map_err(|e| format!("Failed to send message: {}", e))?;
-            Ok(())
+                .map_err(|e| format!("Failed to send message: {}", e))
         } else {
             Err("WebSocket not connected".to_string())
         }
@@ -63,24 +64,14 @@ impl WebSocketTrait for WebSocketService {
 
     async fn send_binary_data(data: Vec<u8>, app_handle: AppHandle) -> Result<(), String> {
         let state = app_handle.state::<AppState>();
-        let mut ws_state = state.ws_state.lock().await;
-        info!("Checking WebSocket connection status - Connected: {}, Registered: {}",
-              ws_state.is_connected, ws_state.is_registered);
-        
-        if let Some(stream) = &mut ws_state.stream.as_mut() {
-            info!("Sending binary data of size: {}", data.len());
-            let result = stream.send(Message::Binary(data)).await
-                .map_err(|e| format!("Failed to send binary data: {}", e));
-            
-            if result.is_ok() {
-                info!("Binary data sent successfully");
-            } else {
-                error!("Failed to send binary data: {:?}", result.as_ref().err());
-            }
-            
-            result
+        let ws_state = state.ws_state.lock().await;
+
+        if let Some(stream_arc) = ws_state.stream.clone() {
+            let mut stream = stream_arc.lock().await;
+            stream.send(Message::Binary(data)).await
+                .map_err(|e| format!("Failed to send binary data: {}", e))
         } else {
-            error!("WebSocket not connected - No stream available");
+            error!("WebSocket not connected - No stream available.");
             Err("WebSocket not connected".to_string())
         }
     }
@@ -88,6 +79,15 @@ impl WebSocketTrait for WebSocketService {
 }
 
 impl WebSocketService {
+    pub async fn get_status(app_handle: AppHandle) -> Result<WebSocketStatus, String> {
+        let state = app_handle.state::<AppState>();
+        let ws_state = state.ws_state.lock().await;
+        Ok(WebSocketStatus {
+            connected: ws_state.is_connected,
+            registered: ws_state.is_registered,
+        })
+    }
+
     async fn websocket_handler(
         ws_state: Arc<Mutex<WebSocketState>>,
         app_handle: AppHandle,
@@ -107,8 +107,9 @@ impl WebSocketService {
                     info!("WebSocket connected successfully: {:?}", response);
                     
                     {
+                        let stream_arc = Arc::new(Mutex::new(stream));
                         let mut state = ws_state.lock().await;
-                        state.stream = Some(stream);
+                        state.stream = Some(stream_arc.clone());
                         state.is_connected = true;
                         state.is_registered = false;
                     }
@@ -141,12 +142,13 @@ impl WebSocketService {
         
         while attempts < max_attempts {
             {
-                let mut state = ws_state.lock().await;
+                let state = ws_state.lock().await;
                 if state.is_registered {
                     break;
                 }
                 
-                if let Some(stream) = &mut state.stream.as_mut() {
+                if let Some(stream_arc) = state.stream.clone() {
+                    let mut stream = stream_arc.lock().await;
                     if let Err(e) = stream.send(Message::Text("register:default_user".to_string())).await {
                         error!("Failed to send registration: {}", e);
                         break;
@@ -163,13 +165,14 @@ impl WebSocketService {
         ws_state: Arc<Mutex<WebSocketState>>,
         app_handle: AppHandle,
     ) -> Result<(), String> {
-        // Take the stream out of the state to avoid holding the mutex guard across await points
-        let mut stream = {
-            let mut state = ws_state.lock().await;
-            state.stream.take().ok_or("No WebSocket stream")?
+        let stream_arc = {
+            let state = ws_state.lock().await;
+            state.stream.clone().ok_or("No WebSocket stream")?
         };
 
-        while let Some(message) = stream.next().await {
+        let mut stream_lock = stream_arc.lock().await;
+
+        while let Some(message) = stream_lock.next().await {
             match message {
                 Ok(Message::Text(text)) => {
                     if text == "registered" {
@@ -183,8 +186,7 @@ impl WebSocketService {
                             "registered": true
                         })).map_err(|e| format!("Failed to emit event: {}", e))?;
                     } else if text == "pong" {
-                        // Heartbeat response
-                        info!("Received heartbeat pong");
+                        // Heartbeat response - can be ignored
                     } else {
                         // Forward message to frontend
                         app_handle.emit("websocket-message", text)

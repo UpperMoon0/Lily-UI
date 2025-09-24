@@ -1,5 +1,11 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct WebSocketStatus {
+    pub connected: bool,
+    pub registered: bool,
+}
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::net::TcpStream;
@@ -37,7 +43,7 @@ pub struct LogEntry {
 
 // WebSocket state
 pub struct WebSocketState {
-    pub stream: Option<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+    pub stream: Option<Arc<Mutex<WebSocketStream<MaybeTlsStream<TcpStream>>>>>,
     pub is_connected: bool,
     pub is_registered: bool,
     pub app_handle: Option<tauri::AppHandle>,

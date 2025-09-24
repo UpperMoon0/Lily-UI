@@ -1,5 +1,5 @@
 use crate::domain::interfaces::{FileStorageTrait, WebSocketTrait};
-use crate::domain::models::{AppSettings, ChatMessage, LogEntry, TTSParameters};
+use crate::domain::models::{AppSettings, ChatMessage, LogEntry, TTSParameters, WebSocketStatus};
 use crate::infrastructure::file_storage::FileStorage;
 use crate::infrastructure::websocket::WebSocketService;
 use reqwest;
@@ -177,5 +177,14 @@ pub async fn get_monitoring_data() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub async fn send_websocket_audio(audio_data: Vec<u8>, app_handle: AppHandle) -> Result<(), String> {
-    WebSocketService::send_binary_data(audio_data, app_handle).await
+    let result = WebSocketService::send_binary_data(audio_data, app_handle).await;
+    if let Err(e) = &result {
+        log::error!("send_websocket_audio command failed: {}", e);
+    }
+    result
+}
+
+#[tauri::command]
+pub async fn get_websocket_status(app_handle: AppHandle) -> Result<WebSocketStatus, String> {
+    WebSocketService::get_status(app_handle).await
 }
