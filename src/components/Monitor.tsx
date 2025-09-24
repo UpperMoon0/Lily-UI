@@ -3,6 +3,8 @@ import styles from "./Monitor.module.css";
 import ServiceCard from "./ServiceCard";
 import MCPServiceCard from "./MCPServiceCard";
 import logService from "../services/LogService";
+import webSocketService from "../services/WebSocketService";
+import { listen } from "@tauri-apps/api/event";
 
 interface ServiceStatus {
   name: string;
@@ -69,6 +71,8 @@ const Monitor: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [agentLoopLoading, setAgentLoopLoading] = useState<boolean>(true);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isRegistered, setIsRegistered] = useState<boolean>(false);
   
   // Refs to store scroll position and track changes
   const scrollPositionRef = useRef(0);
@@ -76,6 +80,36 @@ const Monitor: React.FC = () => {
   const scrollResetDetectedRef = useRef(false);
   const domMutationObserverRef = useRef<MutationObserver | null>(null);
   const monitorContainerRef = useRef<HTMLDivElement>(null);
+
+  // Set up WebSocket status listener
+  useEffect(() => {
+    const handleConnectionChange = (connected: boolean) => {
+      setIsConnected(connected);
+      // If we're connecting, we might not be registered yet
+      if (!connected) {
+        setIsRegistered(false);
+      }
+    };
+
+    // Add listener for connection status changes
+    webSocketService.addConnectionListener(handleConnectionChange);
+
+    // Get initial status
+    setIsConnected(webSocketService.getIsConnected());
+    setIsRegistered(webSocketService.getIsRegistered());
+
+    // Set up event listener for registration status
+    const unsubscribePromise = listen('websocket-status', (event: any) => {
+      const status = event.payload;
+      setIsConnected(status.connected);
+      setIsRegistered(status.registered);
+    }).then(unsubscribe => unsubscribe);
+
+    return () => {
+      webSocketService.removeConnectionListener(handleConnectionChange);
+      unsubscribePromise.then(unsubscribe => unsubscribe());
+    };
+  }, []);
 
   const fetchMonitoringData = async () => {
     setLoading(true);
@@ -499,7 +533,7 @@ const Monitor: React.FC = () => {
           {/* General Tab Content */}
           {activeTab === "general" && (
             <>
-              {/* Overall Status */}
+              {/* Overall System Status */}
               <div className="overall-status">
                 <h2>Overall System Status</h2>
                 <div className={`status-indicator ${getStatusColor(monitoringData.status)}`}>
@@ -509,6 +543,20 @@ const Monitor: React.FC = () => {
                 <div className="system-info">
                   <p><strong>Service:</strong> {monitoringData.service_name}</p>
                   <p><strong>Version:</strong> {monitoringData.version}</p>
+                </div>
+              </div>
+              
+              {/* WebSocket Connection Status */}
+              <div className="overall-status">
+                <h2>WebSocket Connection</h2>
+                <div className="connection-status">
+                  {isConnected ? (
+                    <span className="status-connected">
+                      ● Connected {isRegistered ? "(Registered)" : "(Not Registered)"}
+                    </span>
+                  ) : (
+                    <span className="status-disconnected">● Disconnected</span>
+                  )}
                 </div>
               </div>
           

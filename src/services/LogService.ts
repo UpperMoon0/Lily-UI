@@ -98,6 +98,11 @@ class LogService {
   async logError(message: string, details?: any) {
     await this.addLogEntry('error', message, details);
   }
+
+  // Log debug event
+  async logDebug(message: string, details?: any) {
+    await this.addLogEntry('debug', message, details);
+  }
 }
 
 // Create a singleton instance

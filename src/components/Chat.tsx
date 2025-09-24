@@ -650,6 +650,8 @@ const Chat: React.FC = () => {
         // Set audio active state based on volume threshold
         const isActive = volume > 2;
         
+        logService.logDebug(`Audio detected with volume: ${volume.toFixed(2)}`);
+
         // Log when audio activity changes
         if (isAudioActive !== isActive) {
           logService.logInfo("Audio activity changed", {
@@ -881,17 +883,6 @@ const Chat: React.FC = () => {
         </div>
       </div>
       
-      {/* Connection status indicator */}
-      <div className="connection-status">
-        {isConnected ? (
-          <span className="status-connected">
-            ● Connected {isRegistered ? "(Registered)" : "(Not Registered)"}
-          </span>
-        ) : (
-          <span className="status-disconnected">● Disconnected</span>
-        )}
-      </div>
-
       {/* Audio activity indicator */}
       {conversationMode && (
         <div className="audio-activity-indicator">

@@ -15,17 +15,7 @@ function App() {
 
   // Initialize WebSocket connection when app starts
   useEffect(() => {
-    console.log("App: Initializing WebSocket connection");
-    // Connect to WebSocket server
-    webSocketService.connect().catch(error => {
-      console.error("App: Failed to connect to WebSocket:", error);
-    });
-
-    // Cleanup function to disconnect when app closes
-    return () => {
-      console.log("App: Disconnecting WebSocket");
-      webSocketService.disconnect();
-    };
+    // The WebSocketService now handles its own initialization
   }, []);
 
   return (

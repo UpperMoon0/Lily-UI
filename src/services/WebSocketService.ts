@@ -11,18 +11,19 @@ class WebSocketService {
   private isAppClosing: boolean = false;
   private unsubscribeFunctions: Array<() => void> = [];
 
-  // Connect to WebSocket server via Rust
-  async connect() {
-    console.log("WebSocketService: Initiating connection via Rust backend");
-    logService.logInfo("WebSocketService: Initiating connection via Rust backend", {
+  constructor() {
+    this.init();
+  }
+
+  // Initialize the WebSocket service
+  async init() {
+    console.log("WebSocketService: Initializing");
+    logService.logInfo("WebSocketService: Initializing", {
       timestamp: new Date().toISOString()
     });
-    
-    this.isAppClosing = false;
-    
-    // Set up event listeners for WebSocket status and messages
+
+    // Set up event listeners
     try {
-      // Listen for WebSocket status events
       const unsubscribeStatus = await listen('websocket-status', (event: any) => {
         const status = event.payload;
         console.log("WebSocketService: Status update - Connected:", status.connected, "Registered:", status.registered);
@@ -37,7 +38,6 @@ class WebSocketService {
       });
       this.unsubscribeFunctions.push(unsubscribeStatus);
 
-      // Listen for WebSocket message events
       const unsubscribeMessage = await listen('websocket-message', (event: any) => {
         console.log("WebSocketService: Message received:", event.payload);
         logService.logInfo("WebSocketService: Message received", {
@@ -48,7 +48,6 @@ class WebSocketService {
       });
       this.unsubscribeFunctions.push(unsubscribeMessage);
 
-      // Listen for WebSocket binary events (e.g., audio)
       const unsubscribeBinary = await listen('websocket-binary', (event: any) => {
         console.log("WebSocketService: Binary data received");
         logService.logInfo("WebSocketService: Binary data received", {
@@ -65,8 +64,40 @@ class WebSocketService {
         error: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString()
       });
-      throw error;
     }
+
+    // Check initial status and connect if needed
+    this.getStatus(true);
+  }
+
+  // Get WebSocket status from Rust
+  async getStatus(shouldConnect: boolean = false) {
+    try {
+      const status = await invoke<{ connected: boolean; registered: boolean }>('get_websocket_status');
+      this.isConnected = status.connected;
+      this.isRegistered = status.registered;
+      this.notifyConnectionListeners(this.isConnected);
+
+      if (shouldConnect && !status.connected) {
+        this.connect();
+      }
+    } catch (error) {
+      console.error("WebSocketService: Failed to get status", error);
+      if (shouldConnect) {
+        this.connect();
+      }
+    }
+  }
+
+
+  // Connect to WebSocket server via Rust
+  async connect() {
+    console.log("WebSocketService: Initiating connection via Rust backend");
+    logService.logInfo("WebSocketService: Initiating connection via Rust backend", {
+      timestamp: new Date().toISOString()
+    });
+    
+    this.isAppClosing = false;
 
     // Start WebSocket connection through Rust
     try {

@@ -177,6 +177,7 @@ pub async fn get_monitoring_data() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub async fn send_websocket_audio(audio_data: Vec<u8>, app_handle: AppHandle) -> Result<(), String> {
+    log::debug!("Audio data detected, size: {}", audio_data.len());
     log::info!("send_websocket_audio command received - Audio data size: {} bytes", audio_data.len());
     
     let result = WebSocketService::send_binary_data(audio_data, app_handle).await;

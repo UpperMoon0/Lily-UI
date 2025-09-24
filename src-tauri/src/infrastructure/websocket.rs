@@ -79,6 +79,7 @@ impl WebSocketTrait for WebSocketService {
 
         if let Some(stream_arc) = ws_state.stream.clone() {
             let mut stream = stream_arc.lock().await;
+            debug!("Sending binary data with size: {}", data.len());
             let result = stream.send(Message::Binary(data.clone())).await;
             
             match &result {
