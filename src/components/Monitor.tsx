@@ -165,8 +165,6 @@ const Monitor: React.FC = () => {
       console.log("Pre-fetch scroll state - current:", preFetchScroll, "stored:", preFetchStored, "lastNonZero:", preFetchLastNonZero, "for agent tab");
     }
     
-    console.log("fetchAgentLoopData called - current scrollTop:", preFetchScroll, "activeTab:", activeTab);
-    
     // Only set loading if we don't have data yet (initial load)
     if (!agentLoopData) {
       setAgentLoopLoading(true);
@@ -208,8 +206,6 @@ const Monitor: React.FC = () => {
   };
 
   useEffect(() => {
-    console.log("Monitor component mounted, setting up intervals");
-    
     // Initialize scroll position from session storage if available
     const savedScroll = parseInt(sessionStorage.getItem('agentScrollPosition') || '0', 10);
     const savedLastNonZero = parseInt(sessionStorage.getItem('agentLastNonZeroScroll') || '0', 10);
@@ -240,7 +236,6 @@ const Monitor: React.FC = () => {
     }
     
     return () => {
-      console.log("Monitor component unmounting, clearing intervals and observer");
       clearInterval(intervalId);
       clearInterval(agentLoopIntervalId);
       if (domMutationObserverRef.current) {

@@ -8,6 +8,7 @@ use tokio_tungstenite::connect_async;
 use url::Url;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::{interval, Duration};
 
 pub struct WebSocketService;
 
@@ -151,11 +152,27 @@ impl WebSocketService {
                     
                     // Handle messages
                     info!("Starting message handler");
-                    if let Err(e) = WebSocketService::handle_messages(ws_state.clone(), app_handle.clone()).await {
-                        error!("Error handling messages: {}", e);
+                    let message_handler = WebSocketService::handle_messages(ws_state.clone(), app_handle.clone());
+                    
+                    // Start ping task
+                    info!("Starting ping task");
+                    let ping_task = WebSocketService::ping_task(ws_state.clone());
+                    
+                    // Run both tasks concurrently
+                    tokio::select! {
+                        result = message_handler => {
+                            if let Err(e) = result {
+                                error!("Error handling messages: {}", e);
+                            }
+                        }
+                        result = ping_task => {
+                            if let Err(e) = result {
+                                error!("Error in ping task: {}", e);
+                            }
+                        }
                     }
                     
-                    info!("Message handler completed, reconnecting...");
+                    info!("Message handler or ping task completed, reconnecting...");
                 }
                 Err(e) => {
                     error!("WebSocket connection failed: {}. Retrying in 3 seconds...", e);
@@ -234,8 +251,8 @@ impl WebSocketService {
                             "registered": true
                         })).map_err(|e| format!("Failed to emit event: {}", e))?;
                     } else if text == "pong" {
-                        // Heartbeat response - can be ignored
-                        debug!("Received heartbeat response (pong)");
+                        // Heartbeat response - log for debugging
+                        info!("Received heartbeat response (pong) from server");
                     } else {
                         info!("Forwarding text message to frontend");
                         // Forward message to frontend
@@ -279,6 +296,33 @@ impl WebSocketService {
             "connected": false,
             "registered": false
         })).map_err(|e| format!("Failed to emit event: {}", e))?;
+        
+        Ok(())
+    }
+    
+    async fn ping_task(ws_state: Arc<Mutex<WebSocketState>>) -> Result<(), String> {
+        let mut interval = interval(Duration::from_secs(25)); // Ping every 25 seconds
+        
+        loop {
+            interval.tick().await;
+            
+            // Check if we're still connected
+            {
+                let state = ws_state.lock().await;
+                if !state.is_connected {
+                    info!("WebSocket disconnected, stopping ping task");
+                    break;
+                }
+            }
+            
+            // Send ping message
+            info!("Sending ping to server");
+            if let Err(e) = WebSocketService::send_message("ping".to_string(), ws_state.lock().await.app_handle.clone().unwrap()).await {
+                error!("Failed to send ping: {}", e);
+                // Break the loop to trigger reconnection
+                break;
+            }
+        }
         
         Ok(())
     }
