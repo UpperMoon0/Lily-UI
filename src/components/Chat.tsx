@@ -272,6 +272,11 @@ const Chat: React.FC = () => {
   const toggleConversationMode = async () => {
     if (conversationMode) {
       // Stop recording
+      logService.logInfo("Conversation mode deactivated", {
+        timestamp: new Date().toISOString(),
+        reason: "User toggled conversation mode off"
+      });
+      
       if (mediaRecorder) {
         try {
           if (mediaRecorder.state === 'recording') {
@@ -314,13 +319,30 @@ const Chat: React.FC = () => {
       }
     } else {
       // Start recording
+      logService.logInfo("Attempting to activate conversation mode", {
+        timestamp: new Date().toISOString(),
+        reason: "User toggled conversation mode on"
+      });
+      
       try {
         // Check WebSocket connection before starting recording
         const connected = webSocketService.getIsConnected();
         const registered = webSocketService.getIsRegistered();
         
+        logService.logInfo("WebSocket connection status check", {
+          connected,
+          registered,
+          timestamp: new Date().toISOString()
+        });
+        
         if (!connected || !registered) {
-          console.warn("WebSocket not connected or registered, cannot start conversation mode");
+          const errorMsg = "WebSocket not connected or registered, cannot start conversation mode";
+          console.warn(errorMsg);
+          logService.logError(errorMsg, {
+            connected,
+            registered,
+            timestamp: new Date().toISOString()
+          });
           alert("WebSocket connection is not available. Please make sure the backend services are running.");
           return;
         }
@@ -330,6 +352,11 @@ const Chat: React.FC = () => {
           : { audio: true };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         
+        logService.logInfo("Microphone access granted", {
+          constraints,
+          timestamp: new Date().toISOString()
+        });
+        
         // Use the same stream for both recording and analysis
         // This ensures consistency and avoids potential issues with cloned streams
         const analysisStream = stream;
@@ -337,6 +364,10 @@ const Chat: React.FC = () => {
         // Set conversation mode to true before creating the recorder
         // This ensures that when ondataavailable fires, conversationMode is already true
         setConversationMode(true);
+        
+        logService.logInfo("Conversation mode activated", {
+          timestamp: new Date().toISOString()
+        });
         
         const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
         
@@ -355,8 +386,18 @@ const Chat: React.FC = () => {
         setMediaRecorder(recorder);
         recorder.start(1000); // Capture chunks every second
         
+        logService.logInfo("MediaRecorder started", {
+          mimeType: 'audio/webm',
+          timestamp: new Date().toISOString()
+        });
+        
         recorder.onerror = (event) => {
-          console.error("MediaRecorder error event:", event);
+          const errorMsg = "MediaRecorder error event";
+          console.error(errorMsg, event);
+          logService.logError(errorMsg, {
+            event,
+            timestamp: new Date().toISOString()
+          });
         };
         
         // Set up audio analysis for visual feedback
@@ -367,7 +408,13 @@ const Chat: React.FC = () => {
           const connected = webSocketService.getIsConnected();
           const registered = webSocketService.getIsRegistered();
           if (!connected || !registered) {
-            console.warn("WebSocket connection lost during recording, stopping conversation mode");
+            const warnMsg = "WebSocket connection lost during recording, stopping conversation mode";
+            console.warn(warnMsg);
+            logService.logError(warnMsg, {
+              connected,
+              registered,
+              timestamp: new Date().toISOString()
+            });
             // Stop recording if connection is lost
             toggleConversationMode();
           }
@@ -380,7 +427,12 @@ const Chat: React.FC = () => {
           return originalStop();
         };
       } catch (error) {
-        console.error("Error accessing microphone:", error);
+        const errorMsg = "Error accessing microphone";
+        console.error(errorMsg, error);
+        logService.logError(errorMsg, {
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString()
+        });
         alert("Microphone access denied. Please allow microphone permissions to use conversation mode.");
       }
     }
@@ -393,12 +445,31 @@ const Chat: React.FC = () => {
       return;
     }
     
+    logService.logInfo("Preparing to send audio chunk", {
+      conversationMode: conversationModeRef.current,
+      blobSize: audioBlob.size,
+      timestamp: new Date().toISOString()
+    });
+    
     // Additional check for WebSocket connection before sending
     const connected = webSocketService.getIsConnected();
     const registered = webSocketService.getIsRegistered();
     
+    logService.logInfo("WebSocket connection status before sending audio chunk", {
+      connected,
+      registered,
+      timestamp: new Date().toISOString()
+    });
+    
     if (!connected || !registered) {
-      console.warn("WebSocket not connected or registered in sendAudioChunk, skipping audio chunk send");
+      const warnMsg = "WebSocket not connected or registered in sendAudioChunk, skipping audio chunk send";
+      console.warn(warnMsg);
+      logService.logError(warnMsg, {
+        connected,
+        registered,
+        blobSize: audioBlob.size,
+        timestamp: new Date().toISOString()
+      });
       return;
     }
     
@@ -409,38 +480,74 @@ const Chat: React.FC = () => {
       const registered = webSocketService.getIsRegistered();
       
       if (!connected || !registered) {
-        console.warn("WebSocket not connected or registered, skipping audio chunk send");
+        const warnMsg = "WebSocket not connected or registered, skipping audio chunk send";
+        console.warn(warnMsg);
+        logService.logError(warnMsg, {
+          connected,
+          registered,
+          blobSize: audioBlob.size,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
       
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioData = new Uint8Array(arrayBuffer);
       
+      logService.logInfo("Audio chunk converted to Uint8Array", {
+        arrayBufferSize: arrayBuffer.byteLength,
+        audioDataSize: audioData.length,
+        timestamp: new Date().toISOString()
+      });
+      
       // Add a small delay to allow the WebSocket connection to stabilize
       await new Promise(resolve => setTimeout(resolve, 50));
       
       // Final connection check before sending
       if (!webSocketService.getIsConnected() || !webSocketService.getIsRegistered()) {
-        console.warn("WebSocket disconnected just before sending. Aborting.");
+        const warnMsg = "WebSocket disconnected just before sending. Aborting.";
+        console.warn(warnMsg);
+        logService.logError(warnMsg, {
+          connected: webSocketService.getIsConnected(),
+          registered: webSocketService.getIsRegistered(),
+          audioDataSize: audioData.length,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
 
+      logService.logInfo("Sending audio chunk via WebSocket", {
+        audioDataSize: audioData.length,
+        timestamp: new Date().toISOString()
+      });
+
       // Send via WebSocket using Rust backend
       await invoke('send_websocket_audio', { audioData: Array.from(audioData) });
+      
+      logService.logInfo("Audio chunk sent successfully via WebSocket", {
+        audioDataSize: audioData.length,
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
       const currentConnected = webSocketService.getIsConnected();
       const currentRegistered = webSocketService.getIsRegistered();
-      console.error("Error sending audio chunk:", error);
-      console.error(
-        "WebSocket connection status at time of error - Connected:",
-        currentConnected,
-        "Registered:",
-        currentRegistered
-      );
+      const errorMsg = "Error sending audio chunk";
+      console.error(errorMsg, error);
+      logService.logError(errorMsg, {
+        error: error instanceof Error ? error.message : String(error),
+        connected: currentConnected,
+        registered: currentRegistered,
+        blobSize: audioBlob.size,
+        timestamp: new Date().toISOString()
+      });
       
       // Additional error handling - check if this is a WebSocket connection issue
       if (error instanceof Error && error.toString().includes("WebSocket not connected")) {
-        console.error("WebSocket connection was lost during audio transmission");
+        const connErrorMsg = "WebSocket connection was lost during audio transmission";
+        console.error(connErrorMsg);
+        logService.logError(connErrorMsg, {
+          timestamp: new Date().toISOString()
+        });
         // We could try to reconnect here or notify the user
       }
     }
@@ -449,9 +556,20 @@ const Chat: React.FC = () => {
   // Set up audio analysis for visual feedback
   const setupAudioAnalysis = (stream: MediaStream) => {
     try {
+      logService.logInfo("Setting up audio analysis", {
+        streamActive: stream?.active,
+        timestamp: new Date().toISOString()
+      });
+      
       // Check if stream is valid
       if (!stream || !stream.active) {
-        console.error("Invalid or inactive stream provided for audio analysis");
+        const errorMsg = "Invalid or inactive stream provided for audio analysis";
+        console.error(errorMsg);
+        logService.logError(errorMsg, {
+          stream: !!stream,
+          streamActive: stream?.active,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
       
@@ -459,15 +577,29 @@ const Chat: React.FC = () => {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new AudioContext();
       
+      logService.logInfo("Audio context created", {
+        state: audioContext.state,
+        timestamp: new Date().toISOString()
+      });
+      
       // Ensure audio context is resumed (required for modern browsers)
       if (audioContext.state === 'suspended') {
         audioContext.resume().catch(error => {
-          console.error("Failed to resume audio context:", error);
+          const errorMsg = "Failed to resume audio context";
+          console.error(errorMsg, error);
+          logService.logError(errorMsg, {
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString()
+          });
         });
       }
       
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(stream);
+      
+      logService.logInfo("Audio analyser and source created", {
+        timestamp: new Date().toISOString()
+      });
       
       // Connect nodes - IMPORTANT: Connect to both analyser AND destination
       // If we only connect to analyser, the audio won't play through speakers
@@ -487,6 +619,11 @@ const Chat: React.FC = () => {
       
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
+      
+      logService.logInfo("Audio analysis setup complete, starting detection loop", {
+        bufferLength,
+        timestamp: new Date().toISOString()
+      });
       
       // Start analysis
       const detectAudio = () => {
@@ -513,6 +650,16 @@ const Chat: React.FC = () => {
         // Set audio active state based on volume threshold
         const isActive = volume > 2;
         
+        // Log when audio activity changes
+        if (isAudioActive !== isActive) {
+          logService.logInfo("Audio activity changed", {
+            active: isActive,
+            volume: volume.toFixed(2),
+            threshold: 2,
+            timestamp: new Date().toISOString()
+          });
+        }
+        
         setIsAudioActive(isActive);
         
         // Reset activity timeout
@@ -524,6 +671,9 @@ const Chat: React.FC = () => {
         if (isActive) {
           activityTimeoutRef.current = setTimeout(() => {
             setIsAudioActive(false);
+            logService.logInfo("Audio activity timeout", {
+              timestamp: new Date().toISOString()
+            });
           }, 500); // Show activity for at least 500ms
         }
         
@@ -533,7 +683,12 @@ const Chat: React.FC = () => {
       // Start the audio detection loop
       animationFrameRef.current = requestAnimationFrame(detectAudio);
     } catch (error) {
-      console.error("Error setting up audio analysis:", error);
+      const errorMsg = "Error setting up audio analysis";
+      console.error(errorMsg, error);
+      logService.logError(errorMsg, {
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      });
     }
   };
 

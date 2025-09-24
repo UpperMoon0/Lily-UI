@@ -1,6 +1,7 @@
 // WebSocketService.ts
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import logService from './LogService';
 
 class WebSocketService {
   private isConnected: boolean = false;
@@ -13,6 +14,9 @@ class WebSocketService {
   // Connect to WebSocket server via Rust
   async connect() {
     console.log("WebSocketService: Initiating connection via Rust backend");
+    logService.logInfo("WebSocketService: Initiating connection via Rust backend", {
+      timestamp: new Date().toISOString()
+    });
     
     this.isAppClosing = false;
     
@@ -22,6 +26,11 @@ class WebSocketService {
       const unsubscribeStatus = await listen('websocket-status', (event: any) => {
         const status = event.payload;
         console.log("WebSocketService: Status update - Connected:", status.connected, "Registered:", status.registered);
+        logService.logInfo("WebSocketService: Status update", {
+          connected: status.connected,
+          registered: status.registered,
+          timestamp: new Date().toISOString()
+        });
         this.isConnected = status.connected;
         this.isRegistered = status.registered;
         this.notifyConnectionListeners(this.isConnected);
@@ -31,6 +40,10 @@ class WebSocketService {
       // Listen for WebSocket message events
       const unsubscribeMessage = await listen('websocket-message', (event: any) => {
         console.log("WebSocketService: Message received:", event.payload);
+        logService.logInfo("WebSocketService: Message received", {
+          payload: event.payload,
+          timestamp: new Date().toISOString()
+        });
         this.notifyMessageListeners(event.payload);
       });
       this.unsubscribeFunctions.push(unsubscribeMessage);
@@ -38,30 +51,56 @@ class WebSocketService {
       // Listen for WebSocket binary events (e.g., audio)
       const unsubscribeBinary = await listen('websocket-binary', (event: any) => {
         console.log("WebSocketService: Binary data received");
+        logService.logInfo("WebSocketService: Binary data received", {
+          dataSize: event.payload?.length || 0,
+          timestamp: new Date().toISOString()
+        });
         this.notifyMessageListeners(event.payload);
       });
       this.unsubscribeFunctions.push(unsubscribeBinary);
     } catch (error) {
-      console.error("WebSocketService: Failed to set up event listeners:", error);
+      const errorMsg = "WebSocketService: Failed to set up event listeners";
+      console.error(errorMsg, error);
+      logService.logError(errorMsg, {
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      });
       throw error;
     }
 
     // Start WebSocket connection through Rust
     try {
       await invoke('connect_websocket');
-      console.log("WebSocketService: Connection initiated via Rust");
+      const successMsg = "WebSocketService: Connection initiated via Rust";
+      console.log(successMsg);
+      logService.logInfo(successMsg, {
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
-      console.error("WebSocketService: Failed to connect via Rust:", error);
+      const errorMsg = "WebSocketService: Failed to connect via Rust";
+      console.error(errorMsg, error);
+      logService.logError(errorMsg, {
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      });
       throw error;
     }
   }
 
   // Disconnect from WebSocket server via Rust
   async disconnect() {
-    console.log("WebSocketService: Disconnecting WebSocket via Rust");
+    const disconnectMsg = "WebSocketService: Disconnecting WebSocket via Rust";
+    console.log(disconnectMsg);
+    logService.logInfo(disconnectMsg, {
+      timestamp: new Date().toISOString()
+    });
     this.isAppClosing = true;
     
     // Clean up event listeners
+    logService.logInfo("WebSocketService: Cleaning up event listeners", {
+      listenerCount: this.unsubscribeFunctions.length,
+      timestamp: new Date().toISOString()
+    });
     this.unsubscribeFunctions.forEach(unsubscribe => {
       unsubscribe();
     });
@@ -70,25 +109,53 @@ class WebSocketService {
     // Disconnect through Rust
     try {
       await invoke('disconnect_websocket');
-      console.log("WebSocketService: Disconnected via Rust");
+      const successMsg = "WebSocketService: Disconnected via Rust";
+      console.log(successMsg);
+      logService.logInfo(successMsg, {
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
-      console.error("WebSocketService: Failed to disconnect via Rust:", error);
+      const errorMsg = "WebSocketService: Failed to disconnect via Rust";
+      console.error(errorMsg, error);
+      logService.logError(errorMsg, {
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      });
       throw error;
     }
     
     // Reset status
     this.isConnected = false;
     this.isRegistered = false;
-    console.log("WebSocketService: Connection status reset");
+    const resetMsg = "WebSocketService: Connection status reset";
+    console.log(resetMsg);
+    logService.logInfo(resetMsg, {
+      timestamp: new Date().toISOString()
+    });
   }
 
   // Send a message through the WebSocket via Rust
   async send(message: string) {
     try {
+      logService.logInfo("WebSocketService: Sending message via Rust", {
+        messageLength: message.length,
+        timestamp: new Date().toISOString()
+      });
       await invoke('send_websocket_message', { message });
-      console.log("WebSocketService: Message sent via Rust:", message);
+      const successMsg = "WebSocketService: Message sent via Rust";
+      console.log(successMsg, message);
+      logService.logInfo(successMsg, {
+        messageLength: message.length,
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
-      console.error("WebSocketService: Failed to send message via Rust:", error);
+      const errorMsg = "WebSocketService: Failed to send message via Rust";
+      console.error(errorMsg, error);
+      logService.logError(errorMsg, {
+        error: error instanceof Error ? error.message : String(error),
+        messageLength: message.length,
+        timestamp: new Date().toISOString()
+      });
       throw error;
     }
   }
