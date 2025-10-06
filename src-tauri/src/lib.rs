@@ -1,23 +1,30 @@
+#[cfg(feature = "tauri")]
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use std::sync::Arc;
 
+#[cfg(feature = "tauri")]
 // Domain layer
 pub mod domain;
+#[cfg(feature = "tauri")]
 use domain::models::{AppState, WebSocketState};
 
 // Services layer
-use crate::services::audio_service::AudioService;
+pub use crate::services::audio_service::AudioService;
 
 // Application layer
+#[cfg(feature = "tauri")]
 pub mod application;
+#[cfg(feature = "tauri")]
 use application::commands;
 
 // Infrastructure layer
+#[cfg(feature = "tauri")]
 pub mod infrastructure;
 
 // Services layer
 pub mod services;
 
+#[cfg(feature = "tauri")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
