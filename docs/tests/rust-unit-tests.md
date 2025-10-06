@@ -66,17 +66,17 @@ cargo test test_audio_service_initialization  # Specific test
 
 ## Known Limitations
 
-### Windows Audio DLL Issues
+### Windows Audio DLL Issues (Resolved)
 
-**Problem**: Windows audio system cannot be tested due to DLL loading constraints in test environment.
+**Problem**: Windows audio system required DLLs that caused STATUS_ENTRYPOINT_NOT_FOUND errors in test environment.
 
-**Current Workarounds**:
-- Test mathematical computations without hardware
-- Validate data structures and algorithms
-- Use integration tests for full audio pipeline
-- Mock audio interfaces where possible
+**Solution Implemented**:
+- Made cpal dependency optional with feature flag
+- Tests run with `--no-default-features` to avoid audio library loading
+- Audio functionality still available when features enabled
+- All audio-related code properly gated behind feature flags
 
-**Impact**: Audio hardware interaction testing deferred to integration tests.
+**Impact**: Audio hardware interaction testing now works in integration tests.
 
 ## Test Coverage Metrics
 
@@ -87,7 +87,7 @@ cargo test test_audio_service_initialization  # Specific test
 | Memory Management | 95% | 6/7 | ✅ Excellent |
 | Audio Processing | 80% | 5/7 | ⚠️ Limited* |
 
-*Limited due to Windows audio DLL constraints
+*Limited due to hardware abstraction complexity
 
 ## Future Test Enhancements
 

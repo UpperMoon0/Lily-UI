@@ -81,9 +81,9 @@ Lily-UI/src-tauri/
 ### Running Integration Tests
 
 ```bash
-cargo test --test audio_integration          # Run all integration tests
-cargo test --test audio_integration -- --nocapture  # With output
-cargo test --test audio_integration::audio_integration_tests::test_start_audio_recording_command  # Specific test
+cargo test --no-default-features --test audio_integration          # Run all integration tests
+cargo test --no-default-features --test audio_integration -- --nocapture  # With output
+cargo test --no-default-features --test audio_integration::audio_integration_tests::test_start_audio_recording_command  # Specific test
 ```
 
 ### Test Environment Setup
@@ -190,7 +190,7 @@ jobs:
         run: npm run build
         working-directory: Lily-UI
       - name: Run Rust integration tests
-        run: cargo test --test audio_integration
+        run: cargo test --no-default-features --test audio_integration
 ```
 
 ## Mocking Strategy
