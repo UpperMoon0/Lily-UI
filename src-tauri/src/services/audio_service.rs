@@ -134,23 +134,14 @@ impl AudioService {
                     let _ = producer.push(sample_f32);
                 }
 
-                // Calculate RMS every 100ms worth of samples
-                let sample_rate = config.sample_rate.0 as usize;
-                let samples_per_100ms = (sample_rate / 10) as usize;
-
-                if data.len() >= samples_per_100ms {
+                // Calculate RMS on every callback that has samples
+                if data.len() > 0 {
                     let mut sum_squares = 0.0;
                     let mut count = 0;
 
-                    // Use the most recent samples for RMS calculation
-                    let start_idx = if data.len() > samples_per_100ms {
-                        data.len() - samples_per_100ms
-                    } else {
-                        0
-                    };
-
-                    for i in start_idx..data.len() {
-                        let sample_f32 = data[i].into();
+                    // Calculate RMS from all samples in this callback
+                    for &sample in data {
+                        let sample_f32 = sample.into();
                         sum_squares += sample_f32 * sample_f32;
                         count += 1;
                     }

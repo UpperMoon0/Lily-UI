@@ -175,7 +175,7 @@ impl WebSocketService {
                     info!("Message handler or ping task completed, reconnecting...");
                 }
                 Err(e) => {
-                    error!("WebSocket connection failed: {}. Retrying in 3 seconds...", e);
+                    warn!("WebSocket connection failed: {}. Retrying in 3 seconds...", e);
                     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
                 }
             }
@@ -199,7 +199,7 @@ impl WebSocketService {
                     info!("Sending registration message - Attempt {}/{}", attempts + 1, max_attempts);
                     let mut stream = stream_arc.lock().await;
                     if let Err(e) = stream.send(Message::Text("register:default_user".to_string())).await {
-                        error!("Failed to send registration: {}", e);
+                        warn!("Failed to send registration (server may be unavailable): {}", e);
                         break;
                     }
                     info!("Registration message sent successfully");
@@ -271,7 +271,7 @@ impl WebSocketService {
                     break;
                 }
                 Err(e) => {
-                    error!("WebSocket error: {}", e);
+                    warn!("WebSocket error (server may be unavailable): {}", e);
                     break;
                 }
                 _ => {
@@ -318,7 +318,7 @@ impl WebSocketService {
             // Send ping message
             info!("Sending ping to server");
             if let Err(e) = WebSocketService::send_message("ping".to_string(), ws_state.lock().await.app_handle.clone().unwrap()).await {
-                error!("Failed to send ping: {}", e);
+                warn!("Failed to send ping (server may be unavailable): {}", e);
                 // Break the loop to trigger reconnection
                 break;
             }

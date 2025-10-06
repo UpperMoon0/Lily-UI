@@ -153,8 +153,7 @@ const Chat: React.FC = () => {
     // Listen for audio level events from Rust backend
     const audioLevelUnsubscribe = listen('audio-level', (event: { payload: number }) => {
       const rms = event.payload;
-      const isActive = rms > 0.01; // Threshold for voice activity
-      console.log(`🎵 Rust audio level: ${rms.toFixed(3)} isActive: ${isActive}`);
+      const isActive = rms > 0.025; // Threshold for voice activity
       setIsAudioActive(isActive);
     }).then(unsubscribe => unsubscribe);
 

@@ -20,7 +20,7 @@ tauri-build = { version = "2", features = [], optional = true }
 [features]
 default = ["audio", "tauri"]
 audio = ["cpal"]
-tauri = ["dep:tauri", "dep:tauri-plugin-opener", "dep:tauri-plugin-fs"]
+tauri = ["dep:tauri", "dep:tauri-plugin-opener", "dep:tauri-plugin-fs", "tauri-build"]
 
 [dependencies]
 tauri = { version = "2", features = [], optional = true }
