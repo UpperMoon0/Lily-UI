@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use crate::services::audio_service::AudioService;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct WebSocketStatus {
@@ -60,7 +61,8 @@ impl WebSocketState {
     }
 }
 
-// Global state for WebSocket
+// Global state for WebSocket and Audio
 pub struct AppState {
     pub ws_state: Arc<Mutex<WebSocketState>>,
+    pub audio_service: Arc<AudioService>,
 }

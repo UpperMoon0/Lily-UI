@@ -4,7 +4,6 @@ import logService from "../services/LogService";
 import persistenceService from "../services/PersistenceService";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import useAudioCapture from "../hooks/useAudioCapture";
 
 interface Message {
   role: "user" | "assistant";
@@ -55,18 +54,10 @@ const Chat: React.FC = () => {
   useEffect(() => {
     conversationModeRef.current = conversationMode;
   }, [conversationMode]);
-  const sendAudioChunk = async (audioBlob: Blob) => {
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const audioData = new Uint8Array(arrayBuffer);
-    await invoke('send_websocket_audio', { audioData: Array.from(audioData) });
-  };
 
-  const { isRecording, startRecording, stopRecording } = useAudioCapture(sendAudioChunk);
+  const [isRecording, setIsRecording] = useState(false);
   const [isAudioActive, setIsAudioActive] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number>(0);
-  const activityTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -87,20 +78,12 @@ const Chat: React.FC = () => {
       }
       // Clean up conversation mode
       if (isRecording) {
-        stopRecording();
-      }
-      // Clean up audio analysis
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (activityTimeoutRef.current) {
-        clearTimeout(activityTimeoutRef.current);
-      }
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
+        invoke('stop_audio_recording').catch(error => {
+          console.error("Error stopping audio recording on cleanup:", error);
+        });
       }
     };
-  }, [currentAudio, isRecording, stopRecording]);
+  }, [currentAudio, isRecording]);
 
   // Load conversation history and set up event listeners on component mount
   useEffect(() => {
@@ -166,6 +149,16 @@ const Chat: React.FC = () => {
     }).then(unsubscribe => unsubscribe);
 
     unsubscribePromises.push(statusListenerPromise);
+
+    // Listen for audio level events from Rust backend
+    const audioLevelUnsubscribe = listen('audio-level', (event: { payload: number }) => {
+      const rms = event.payload;
+      const isActive = rms > 0.01; // Threshold for voice activity
+      console.log(`🎵 Rust audio level: ${rms.toFixed(3)} isActive: ${isActive}`);
+      setIsAudioActive(isActive);
+    }).then(unsubscribe => unsubscribe);
+
+    unsubscribePromises.push(audioLevelUnsubscribe);
 
     // Fetch initial WebSocket status from the backend
     const fetchWebSocketStatus = async () => {
@@ -306,54 +299,32 @@ const Chat: React.FC = () => {
         setMicPermission("denied");
       }
     };
-  // Handle conversation mode toggle
-  const setupAudioAnalysis = (stream: MediaStream) => {
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      const audioContext = new AudioContext();
-      const analyser = audioContext.createAnalyser();
-      const source = audioContext.createMediaStreamSource(stream);
-      source.connect(analyser);
-      analyser.fftSize = 256;
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-
-      const detectAudio = () => {
-        if (!analyserRef.current) return;
-        analyserRef.current.getByteTimeDomainData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          const v = dataArray[i] - 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / bufferLength);
-        const isActive = rms > 2;
-        setIsAudioActive(isActive);
-        animationFrameRef.current = requestAnimationFrame(detectAudio);
-      };
-      animationFrameRef.current = requestAnimationFrame(detectAudio);
-    } catch (error) {
-      console.error("Error setting up audio analysis:", error);
-    }
-  };
 
   const toggleConversationMode = async () => {
+    console.log("🎤 Toggle conversation mode - current recording state:", isRecording);
+
     if (isRecording) {
-      stopRecording();
-      setConversationMode(false);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
+      console.log("Stopping Rust audio recording...");
+      try {
+        await invoke('stop_audio_recording');
+        setIsRecording(false);
+        setConversationMode(false);
+        setIsAudioActive(false);
+        console.log("Rust audio recording stopped");
+      } catch (error) {
+        console.error("Error stopping audio recording:", error);
       }
     } else {
-      const stream = await startRecording();
-      if (stream) {
-        setupAudioAnalysis(stream);
+      console.log("Starting Rust audio recording...");
+      try {
+        await invoke('start_audio_recording');
+        setIsRecording(true);
         setConversationMode(true);
+        console.log("Rust audio recording started");
+      } catch (error) {
+        console.error("Error starting audio recording:", error);
+        setIsRecording(false);
+        setConversationMode(false);
       }
     }
   };

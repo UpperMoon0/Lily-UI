@@ -1,10 +1,10 @@
 use crate::domain::interfaces::{FileStorageTrait, WebSocketTrait};
-use crate::domain::models::{AppSettings, ChatMessage, LogEntry, TTSParameters, WebSocketStatus};
+use crate::domain::models::{AppSettings, AppState, ChatMessage, LogEntry, TTSParameters, WebSocketStatus};
 use crate::infrastructure::file_storage::FileStorage;
 use crate::infrastructure::websocket::WebSocketService;
 use reqwest;
 use serde_json;
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub fn greet(name: &str) -> String {
@@ -193,4 +193,30 @@ pub async fn send_websocket_audio(audio_data: Vec<u8>, app_handle: AppHandle) ->
 #[tauri::command]
 pub async fn get_websocket_status(app_handle: AppHandle) -> Result<WebSocketStatus, String> {
     WebSocketService::get_status(app_handle).await
+}
+
+#[tauri::command]
+pub async fn start_audio_recording(app_handle: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    log::info!("Starting audio recording");
+    state.audio_service.set_app_handle(app_handle);
+    state.audio_service.start_recording().await
+}
+
+#[tauri::command]
+pub async fn stop_audio_recording(state: State<'_, AppState>) -> Result<(), String> {
+    log::info!("Stopping audio recording");
+    state.audio_service.stop_recording().await
+}
+
+#[tauri::command]
+pub async fn get_audio_level(_state: State<'_, AppState>) -> Result<f32, String> {
+    // This would return the current RMS level, but for now we'll return 0.0
+    // In a real implementation, we'd want to get the latest value from the audio service
+    Ok(0.0)
+}
+
+#[tauri::command]
+pub async fn get_audio_devices(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    log::info!("Getting available audio devices");
+    state.audio_service.get_available_devices()
 }
