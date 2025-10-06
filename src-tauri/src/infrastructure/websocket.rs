@@ -112,7 +112,7 @@ impl WebSocketService {
         ws_state: Arc<Mutex<WebSocketState>>,
         app_handle: AppHandle,
     ) -> Result<(), String> {
-        let url = Url::parse("ws://localhost:9002")
+        let url = Url::parse("ws://127.0.0.1:9002")
             .map_err(|e| format!("Invalid WebSocket URL: {}", e))?;
         
         info!("Starting WebSocket handler for URL: {}", url);

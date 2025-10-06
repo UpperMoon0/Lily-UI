@@ -30,8 +30,8 @@ const Chat: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [, setIsPlaying] = useState(false);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
-  const [, setIsConnected] = useState(false);
-  const [, setIsRegistered] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Live transcription state
@@ -168,8 +168,8 @@ const Chat: React.FC = () => {
 
     unsubscribePromises.push(audioLevelUnsubscribe);
 
-    // Listen for transcription events from Lily-Core
-    const transcriptionUnsubscribe = listen('transcription', (event: { payload: string }) => {
+    // Listen for WebSocket messages from Lily-Core
+    const transcriptionUnsubscribe = listen('websocket-message', (event: { payload: string }) => {
       // Parse the transcription message (format: "transcription:{json}")
       const messageStr = event.payload;
       if (messageStr.startsWith('transcription:')) {
@@ -815,6 +815,7 @@ const Chat: React.FC = () => {
             type="button"
             className={`mic-button ${conversationMode ? 'active' : ''}`}
             onClick={toggleConversationMode}
+            disabled={!isConnected || !isRegistered}
           >
             🎤
           </button>

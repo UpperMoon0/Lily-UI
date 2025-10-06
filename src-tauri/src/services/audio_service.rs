@@ -6,6 +6,10 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
 #[cfg(feature = "tauri")]
 use tauri::Emitter;
+#[cfg(feature = "tauri")]
+use crate::domain::interfaces::WebSocketTrait;
+#[cfg(feature = "tauri")]
+use crate::infrastructure::websocket::WebSocketService;
 
 #[derive(Clone)]
 pub struct AudioService {
@@ -132,6 +136,19 @@ impl AudioService {
                     let sample_f32 = sample.into();
                     // Try to push, ignore if buffer is full (ring buffer will overwrite oldest)
                     let _ = producer.push(sample_f32);
+                }
+
+                // Send audio data via WebSocket
+                if let Some(handle) = &app_handle {
+                    let mut bytes = Vec::new();
+                    for &sample in data {
+                        let sample_f32 = sample.into();
+                        bytes.extend_from_slice(&sample_f32.to_le_bytes());
+                    }
+                    let handle = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = WebSocketService::send_binary_data(bytes, handle).await;
+                    });
                 }
 
                 // Calculate RMS on every callback that has samples
