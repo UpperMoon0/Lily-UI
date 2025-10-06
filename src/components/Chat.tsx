@@ -11,6 +11,12 @@ interface Message {
   timestamp: string;
 }
 
+interface LiveTranscription {
+  text: string;
+  isInterim: boolean;
+  timestamp: string;
+}
+
 interface TTSParameters {
   speaker: number;
   sample_rate: number;
@@ -27,6 +33,9 @@ const Chat: React.FC = () => {
   const [, setIsConnected] = useState(false);
   const [, setIsRegistered] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Live transcription state
+  const [liveTranscription, setLiveTranscription] = useState<LiveTranscription | null>(null);
   
   // TTS state
   const [ttsEnabled, setTtsEnabled] = useState(false);
@@ -158,6 +167,54 @@ const Chat: React.FC = () => {
     }).then(unsubscribe => unsubscribe);
 
     unsubscribePromises.push(audioLevelUnsubscribe);
+
+    // Listen for transcription events from Lily-Core
+    const transcriptionUnsubscribe = listen('transcription', (event: { payload: string }) => {
+      // Parse the transcription message (format: "transcription:{json}")
+      const messageStr = event.payload;
+      if (messageStr.startsWith('transcription:')) {
+        try {
+          const jsonStr = messageStr.substr(14); // Remove "transcription:" prefix
+          const transcriptionData = JSON.parse(jsonStr);
+          const { type, text } = transcriptionData;
+
+          if (type === 'interim') {
+            // Show interim transcription
+            setLiveTranscription({
+              text: text,
+              isInterim: true,
+              timestamp: new Date().toISOString()
+            });
+          } else if (type === 'final') {
+            // Convert live transcription to final message and clear live transcription
+            if (liveTranscription) {
+              const userMessage: Message = {
+                role: "user",
+                content: text,
+                timestamp: new Date().toISOString(),
+              };
+
+              setMessages((prev) => {
+                const newMessages = [...prev, userMessage];
+                // Save chat history whenever it changes
+                persistenceService.saveChatHistory(newMessages);
+                return newMessages;
+              });
+
+              // Clear live transcription
+              setLiveTranscription(null);
+
+              // Log chat sent event
+              logService.logChatSent(text);
+            }
+          }
+        } catch (error) {
+          console.error("Error parsing transcription message:", error);
+        }
+      }
+    }).then(unsubscribe => unsubscribe);
+
+    unsubscribePromises.push(transcriptionUnsubscribe);
 
     // Fetch initial WebSocket status from the backend
     const fetchWebSocketStatus = async () => {
@@ -714,6 +771,22 @@ const Chat: React.FC = () => {
             </div>
           ))
         )}
+
+        {/* Live transcription display */}
+        {liveTranscription && (
+          <div className="message user live-transcription">
+            <div className="message-content">
+              <div className={`message-text ${liveTranscription.isInterim ? 'interim' : ''}`}>
+                {liveTranscription.text}
+                {liveTranscription.isInterim && <span className="transcription-cursor">|</span>}
+              </div>
+              <div className="message-time">
+                {liveTranscription.isInterim ? 'Listening...' : 'Processing...'}
+              </div>
+            </div>
+          </div>
+        )}
+
         {isLoading && (
           <div className="message assistant">
             <div className="message-content">

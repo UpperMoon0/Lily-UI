@@ -311,6 +311,33 @@ input:checked + .toggle-label .toggle-slider {
   transform: translateX(26px);
 }
 
+/* Live transcription styles */
+.message.live-transcription {
+  opacity: 0.8;
+  animation: fade-in 0.3s ease-in;
+}
+
+.message.live-transcription .message-text.interim {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.transcription-cursor {
+  animation: blink 1s infinite;
+  color: var(--accent-color);
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 0.8; transform: translateY(0); }
+}
+
 /* Chat container */
 .chat-container {
   height: 100%;
