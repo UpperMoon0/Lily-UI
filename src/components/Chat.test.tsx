@@ -3,10 +3,46 @@ import { render, screen } from '@testing-library/react';
 import Chat from './Chat';
 
 // Mock all external dependencies to avoid complex setup
-vi.mock('@tauri-apps/api/core');
-vi.mock('@tauri-apps/api/event');
-vi.mock('../services/LogService');
-vi.mock('../services/PersistenceService');
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(() => Promise.resolve([]))
+}));
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(() => Promise.resolve(() => {}))
+}));
+
+vi.mock('../services/LogService', () => ({
+  default: {
+    logChatSent: vi.fn(),
+    logChatResponse: vi.fn(),
+    logTTSResponse: vi.fn()
+  }
+}));
+
+vi.mock('../services/PersistenceService', () => ({
+  default: {
+    loadSettings: vi.fn(() => Promise.resolve(null)),
+    loadChatHistory: vi.fn(() => Promise.resolve([])),
+    saveChatHistory: vi.fn(),
+    saveSettings: vi.fn(),
+    clearChatHistory: vi.fn()
+  }
+}));
+
+// Mock navigator APIs
+Object.defineProperty(window, 'navigator', {
+  value: {
+    ...window.navigator,
+    mediaDevices: {
+      getUserMedia: vi.fn(() => Promise.resolve({ getTracks: () => [] })),
+      enumerateDevices: vi.fn(() => Promise.resolve([]))
+    },
+    permissions: {
+      query: vi.fn(() => Promise.resolve({ state: 'granted' }))
+    }
+  },
+  writable: true
+});
 
 describe('Chat Component', () => {
   it('renders the chat interface with welcome message', () => {
@@ -22,7 +58,9 @@ describe('Chat Component', () => {
 
     expect(screen.getByPlaceholderText('Type your message here...')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /🎤/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument();
+    // Send button has SVG icon, check by class
+    const sendButton = document.querySelector('.send-button');
+    expect(sendButton).toBeInTheDocument();
   });
 
   it('renders TTS toggle button', () => {
