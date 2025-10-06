@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import Chat from './Chat';
 
 // Mock all external dependencies to avoid complex setup
@@ -45,49 +45,73 @@ Object.defineProperty(window, 'navigator', {
 });
 
 describe('Chat Component', () => {
-  it('renders the chat interface with welcome message', () => {
-    render(<Chat />);
+  it('renders the chat interface with welcome message', async () => {
+    await act(async () => {
+      render(<Chat />);
+    });
 
-    expect(screen.getByText('Chat')).toBeInTheDocument();
-    expect(screen.getByText('Welcome to Lily AI!')).toBeInTheDocument();
-    expect(screen.getByText('Ask me anything and I\'ll do my best to help you.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Chat')).toBeInTheDocument();
+      expect(screen.getByText('Welcome to Lily AI!')).toBeInTheDocument();
+      expect(screen.getByText('Ask me anything and I\'ll do my best to help you.')).toBeInTheDocument();
+    });
   });
 
-  it('renders input form and controls', () => {
-    render(<Chat />);
+  it('renders input form and controls', async () => {
+    await act(async () => {
+      render(<Chat />);
+    });
 
-    expect(screen.getByPlaceholderText('Type your message here...')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /🎤/ })).toBeInTheDocument();
-    // Send button has SVG icon, check by class
-    const sendButton = document.querySelector('.send-button');
-    expect(sendButton).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Type your message here...')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /🎤/ })).toBeInTheDocument();
+      // Send button has SVG icon, check by class
+      const sendButton = document.querySelector('.send-button');
+      expect(sendButton).toBeInTheDocument();
+    });
   });
 
-  it('renders TTS toggle button', () => {
-    render(<Chat />);
+  it('renders TTS toggle button', async () => {
+    await act(async () => {
+      render(<Chat />);
+    });
 
-    expect(screen.getByRole('button', { name: /tts: off/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /tts: off/i })).toBeInTheDocument();
+    });
   });
 
-  it('renders settings button', () => {
-    render(<Chat />);
+  it('renders settings button', async () => {
+    await act(async () => {
+      render(<Chat />);
+    });
 
-    expect(screen.getByRole('button', { name: /settings/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /settings/i })).toBeInTheDocument();
+    });
   });
 
-  it('renders clear chat button', () => {
-    render(<Chat />);
+  it('renders clear chat button', async () => {
+    await act(async () => {
+      render(<Chat />);
+    });
 
-    const clearButton = screen.getByRole('button', { name: /clear chat/i });
-    expect(clearButton).toBeInTheDocument();
-    expect(clearButton).toBeDisabled(); // Should be disabled when no messages
+    await waitFor(() => {
+      const clearButton = screen.getByRole('button', { name: /clear chat/i });
+      expect(clearButton).toBeInTheDocument();
+      expect(clearButton).toBeDisabled(); // Should be disabled when no messages
+    });
   });
 
-  it('renders suggestion prompts in welcome message', () => {
-    render(<Chat />);
+  it('renders suggestion prompts in welcome message', async () => {
+    await act(async () => {
+      render(<Chat />);
+    });
 
-    expect(screen.getByText('What can you help me with?')).toBeInTheDocument();
-    expect(screen.getByText('Tell me a fun fact')).toBeInTheDocument();
-    expect(screen.getByText('How does web search work?')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('What can you help me with?')).toBeInTheDocument();
+      expect(screen.getByText('Tell me a fun fact')).toBeInTheDocument();
+      expect(screen.getByText('How does web search work?')).toBeInTheDocument();
+    });
   });
 });

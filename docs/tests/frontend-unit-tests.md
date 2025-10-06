@@ -11,14 +11,12 @@ Lily-UI/src/
 ├── components/
 │   ├── Chat.test.tsx          # Main chat component tests
 │   └── ...
-├── hooks/
-│   ├── useAudioCapture.test.ts # Audio capture hook tests (removed)
-│   └── ...
-├── utils/
-│   ├── audioUtils.test.ts     # Audio utility tests (removed)
-│   └── ...
 └── App.test.tsx               # Main app component tests
 ```
+
+## Current Test Status
+
+All tests are currently passing with proper mocking of Tauri APIs, browser APIs, and external services.
 
 ## Test Categories
 
