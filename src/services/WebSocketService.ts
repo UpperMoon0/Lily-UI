@@ -8,6 +8,7 @@ class WebSocketService {
   private isRegistered: boolean = false;
   private listeners: Array<(message: any) => void> = [];
   private connectionListeners: Array<(connected: boolean) => void> = [];
+  private statusListeners: Array<(status: { connected: boolean; registered: boolean }) => void> = [];
   private unsubscribeFunctions: Array<() => void> = [];
 
   constructor() {
@@ -34,6 +35,7 @@ class WebSocketService {
         this.isConnected = status.connected;
         this.isRegistered = status.registered;
         this.notifyConnectionListeners(this.isConnected);
+        this.notifyStatusListeners({ connected: this.isConnected, registered: this.isRegistered });
       });
       this.unsubscribeFunctions.push(unsubscribeStatus);
 
@@ -73,9 +75,8 @@ class WebSocketService {
   async getStatus(shouldConnect: boolean = false) {
     try {
       const status = await invoke<{ connected: boolean; registered: boolean }>('get_websocket_status');
-      this.isConnected = status.connected;
-      this.isRegistered = status.registered;
-      this.notifyConnectionListeners(this.isConnected);
+      // Note: We don't set state here, we let the 'websocket-status' event handle it
+      // to ensure a single source of truth.
 
       if (shouldConnect && !status.connected) {
         this.connect();
@@ -223,6 +224,19 @@ class WebSocketService {
     }
   }
 
+  // Add a status listener
+  addStatusListener(listener: (status: { connected: boolean; registered: boolean }) => void) {
+    this.statusListeners.push(listener);
+  }
+
+  // Remove a status listener
+  removeStatusListener(listener: (status: { connected: boolean; registered: boolean }) => void) {
+    const index = this.statusListeners.indexOf(listener);
+    if (index !== -1) {
+      this.statusListeners.splice(index, 1);
+    }
+  }
+
   // Notify all message listeners
   private notifyMessageListeners(message: any) {
     this.listeners.forEach(listener => {
@@ -234,6 +248,13 @@ class WebSocketService {
   private notifyConnectionListeners(connected: boolean) {
     this.connectionListeners.forEach(listener => {
       listener(connected);
+    });
+  }
+
+  // Notify all status listeners
+  private notifyStatusListeners(status: { connected: boolean; registered: boolean }) {
+    this.statusListeners.forEach(listener => {
+      listener(status);
     });
   }
 }

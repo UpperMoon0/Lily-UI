@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import "./Chat.css";
 import logService from "../services/LogService";
 import persistenceService from "../services/PersistenceService";
+import webSocketService from "../services/WebSocketService";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -112,6 +113,14 @@ const Chat: React.FC = () => {
 
     // Get initial WebSocket status
     fetchWebSocketStatus();
+ 
+    // Set up WebSocket status listener
+    const handleStatusChange = (status: { connected: boolean; registered: boolean }) => {
+      setIsConnected(status.connected);
+      setIsRegistered(status.registered);
+    };
+    webSocketService.addStatusListener(handleStatusChange);
+
 
     // Set up event listeners for WebSocket binary data (audio) and status
     const unsubscribePromises: Promise<() => void>[] = [];
@@ -163,15 +172,6 @@ const Chat: React.FC = () => {
     }).then(unsubscribe => unsubscribe);
 
     unsubscribePromises.push(audioListenerPromise);
-
-    // Listen for WebSocket status events
-    const statusListenerPromise = listen('websocket-status', (event: { payload: { connected: boolean; registered: boolean } }) => {
-      const status = event.payload;
-      setIsConnected(status.connected);
-      setIsRegistered(status.registered);
-    }).then(unsubscribe => unsubscribe);
-
-    unsubscribePromises.push(statusListenerPromise);
 
     // Listen for audio level events from Rust backend
     const audioLevelUnsubscribe = listen('audio-level', (event: { payload: number }) => {
@@ -247,6 +247,7 @@ const Chat: React.FC = () => {
       Promise.all(unsubscribePromises).then(unsubscribeFunctions => {
         unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
       });
+      webSocketService.removeStatusListener(handleStatusChange);
     };
   }, []);
 
@@ -824,14 +825,21 @@ const Chat: React.FC = () => {
             disabled={isLoading}
             rows={1}
           />
-          <button
-            type="button"
-            className={`mic-button ${conversationMode ? 'active' : ''}`}
-            onClick={toggleConversationMode}
-            disabled={!isConnected || !isRegistered || micPermission !== "granted"}
-          >
-            🎤
-          </button>
+          <div className="mic-container">
+            <button
+              type="button"
+              className={`mic-button ${conversationMode ? 'active' : ''}`}
+              onClick={toggleConversationMode}
+              disabled={!isConnected || !isRegistered || micPermission !== "granted"}
+            >
+              🎤
+            </button>
+            {(!isConnected || !isRegistered || micPermission !== "granted") && (
+              <span className="mic-status-tooltip">
+                {!isConnected ? "Connecting..." : !isRegistered ? "Registering..." : "Mic disabled"}
+              </span>
+            )}
+          </div>
           <button
             type="submit"
             disabled={isLoading || !inputValue.trim()}

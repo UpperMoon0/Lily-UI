@@ -98,15 +98,15 @@ const Monitor: React.FC = () => {
     setIsRegistered(webSocketService.getIsRegistered());
 
     // Set up event listener for registration status
-    const unsubscribePromise = listen('websocket-status', (event: any) => {
-      const status = event.payload;
+    const handleStatusChange = (status: { connected: boolean; registered: boolean }) => {
       setIsConnected(status.connected);
       setIsRegistered(status.registered);
-    }).then(unsubscribe => unsubscribe);
+    };
+    webSocketService.addStatusListener(handleStatusChange);
 
     return () => {
       webSocketService.removeConnectionListener(handleConnectionChange);
-      unsubscribePromise.then(unsubscribe => unsubscribe());
+      webSocketService.removeStatusListener(handleStatusChange);
     };
   }, []);
 

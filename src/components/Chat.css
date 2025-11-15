@@ -158,6 +158,34 @@
   color: var(--background-tertiary);
 }
 
+.mic-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mic-status-tooltip {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: var(--background-tertiary);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  margin-left: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.mic-container:hover .mic-status-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
 /* Settings panel */
 .tts-settings-panel {
   position: fixed;
