@@ -148,6 +148,16 @@
   100% { opacity: 1; }
 }
 
+.mic-button:disabled {
+  color: var(--background-tertiary);
+  cursor: not-allowed;
+}
+
+.mic-button:disabled:hover {
+  background-color: transparent;
+  color: var(--background-tertiary);
+}
+
 /* Settings panel */
 .tts-settings-panel {
   position: fixed;

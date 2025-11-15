@@ -828,7 +828,7 @@ const Chat: React.FC = () => {
             type="button"
             className={`mic-button ${conversationMode ? 'active' : ''}`}
             onClick={toggleConversationMode}
-            disabled={!isConnected || !isRegistered}
+            disabled={!isConnected || !isRegistered || micPermission !== "granted"}
           >
             🎤
           </button>
