@@ -1,5 +1,4 @@
 import React from "react";
-import styles from "./Monitor.module.css";
 
 interface ServiceStatus {
   name: string;

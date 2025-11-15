@@ -53,11 +53,11 @@ interface AgentLoop {
   message?: string;
 }
 
-// Log entry interface
+// Import LogEntry from LogService
 interface LogEntry {
   id: string;
   timestamp: Date;
-  type: "chat_sent" | "chat_response" | "tts_response" | "info" | "error";
+  type: string;
   message: string;
   details?: any;
 }
@@ -77,7 +77,6 @@ const Monitor: React.FC = () => {
   // Refs to store scroll position and track changes
   const scrollPositionRef = useRef(0);
   const lastNonZeroScrollRef = useRef(0);
-  const scrollResetDetectedRef = useRef(false);
   const domMutationObserverRef = useRef<MutationObserver | null>(null);
   const monitorContainerRef = useRef<HTMLDivElement>(null);
 
@@ -187,7 +186,7 @@ const Monitor: React.FC = () => {
       // Only update state if data has changed to prevent unnecessary re-renders
       if (JSON.stringify(data) !== JSON.stringify(agentLoopData)) {
         console.log("Agent loop data changed, updating state - current scrollTop:", container ? container.scrollTop : 0);
-        setAgentLoopData(prevData => {
+        setAgentLoopData(() => {
           console.log("setAgentLoopData called with new data, triggering re-render");
           return data;
         });
@@ -339,97 +338,6 @@ const Monitor: React.FC = () => {
     }
   };
 
-  // Function to parse tool server details and tool information
-  const parseToolServersAndTools = (serviceDetails: Record<string, any> | undefined) => {
-    if (!serviceDetails) return [];
-
-    const toolServers: Array<{
-      url: string;
-      toolCount: number;
-      toolNames: string[];
-      isOnline: boolean;
-      tools: Array<{
-        name: string;
-        description?: string;
-        inputSchema?: any;
-      }>;
-    }> = [];
-
-    // Look for server-specific entries in the details
-    for (const [key, value] of Object.entries(serviceDetails)) {
-      if (key.startsWith('server_') && key.endsWith('_tools')) {
-        // Extract URL from the value string
-        const valueStr = String(value);
-        const urlMatch = valueStr.match(/^([^:]+:\/\/[^:\s]+)/);
-        const countMatch = valueStr.match(/(\d+)\s+tools/);
-        const toolNamesMatch = valueStr.match(/\[([^\]]+)\]/);
-
-        if (urlMatch) {
-          const toolNames = toolNamesMatch ? toolNamesMatch[1].split(', ') : [];
-          const toolCount = countMatch ? parseInt(countMatch[1], 10) : 0;
-
-          toolServers.push({
-            url: urlMatch[1],
-            toolCount,
-            toolNames,
-            isOnline: toolCount > 0,
-            tools: toolNames.map(name => ({
-              name,
-              description: "Perform web search and provide summaries",
-              inputSchema: {
-                type: "object",
-                properties: {
-                  query: {
-                    type: "string",
-                    description: "The search query to perform"
-                  },
-                  mode: {
-                    type: "string",
-                    description: "Response mode: 'summary' or 'detailed'",
-                    enum: ["summary", "detailed"]
-                  }
-                },
-                required: ["query"]
-              }
-            }))
-          });
-        }
-      }
-    }
-
-    // If no detailed server info found, create from server_list
-    if (toolServers.length === 0) {
-      const serverList = serviceDetails.server_list;
-      if (serverList && typeof serverList === 'string') {
-        const servers = serverList.split(', ');
-        servers.forEach((server: string) => {
-          const cleanUrl = server.replace(/^\s+|\s+$/g, '');
-          toolServers.push({
-            url: cleanUrl,
-            toolCount: 1,
-            toolNames: ['Search Tool'],
-            isOnline: true,
-            tools: [{
-              name: 'Web Search',
-              description: "Perform web search and provide summaries",
-              inputSchema: {
-                type: "object",
-                properties: {
-                  query: {
-                    type: "string",
-                    description: "The search query to perform"
-                  }
-                },
-                required: ["query"]
-              }
-            }]
-          });
-        });
-      }
-    }
-
-    return toolServers;
-  };
 
   if (loading && !monitoringData && !error) {
     return (

@@ -8,7 +8,6 @@ class WebSocketService {
   private isRegistered: boolean = false;
   private listeners: Array<(message: any) => void> = [];
   private connectionListeners: Array<(connected: boolean) => void> = [];
-  private isAppClosing: boolean = false;
   private unsubscribeFunctions: Array<() => void> = [];
 
   constructor() {
@@ -96,8 +95,6 @@ class WebSocketService {
     logService.logInfo("WebSocketService: Initiating connection via Rust backend", {
       timestamp: new Date().toISOString()
     });
-    
-    this.isAppClosing = false;
 
     // Start WebSocket connection through Rust
     try {
@@ -125,7 +122,6 @@ class WebSocketService {
     logService.logInfo(disconnectMsg, {
       timestamp: new Date().toISOString()
     });
-    this.isAppClosing = true;
     
     // Clean up event listeners
     logService.logInfo("WebSocketService: Cleaning up event listeners", {

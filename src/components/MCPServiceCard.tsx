@@ -1,5 +1,4 @@
 import React from "react";
-import styles from "./Monitor.module.css";
 
 interface ServiceStatus {
   name: string;
@@ -42,7 +41,7 @@ const MCPServiceCard: React.FC<MCPServiceCardProps> = ({ service, showStatus = t
         {service.details && Object.keys(service.details).length > 0 ? (
           <ul>
             {Object.entries(service.details)
-              .filter(([key, value]) => key !== "tools") // Filter out tools for now, we'll display them separately
+              .filter(([key]) => key !== "tools") // Filter out tools for now, we'll display them separately
               .map(([key, value]) => (
                 <li key={key}>
                   <strong>{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:</strong> {String(value)}

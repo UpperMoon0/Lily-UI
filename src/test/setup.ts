@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 
 // Mock @tauri-apps/api modules
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn((command: string, args?: any) => {
+  invoke: vi.fn((command: string) => {
     // Mock responses based on command
     switch (command) {
       case 'get_logs':

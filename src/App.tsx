@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
 import "./App.css";
 import Sidebar from "./components/Sidebar";
 import Chat from "./components/Chat";
 import Monitor from "./components/Monitor";
-import webSocketService from "./services/WebSocketService";
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);

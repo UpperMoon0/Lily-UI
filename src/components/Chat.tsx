@@ -94,10 +94,24 @@ const Chat: React.FC = () => {
     };
   }, [currentAudio, isRecording]);
 
+  // Fetch WebSocket status
+  const fetchWebSocketStatus = async () => {
+    try {
+      const status = await invoke<{ connected: boolean; registered: boolean }>('get_websocket_status');
+      setIsConnected(status.connected);
+      setIsRegistered(status.registered);
+    } catch (error) {
+      console.error("Error fetching WebSocket status:", error);
+    }
+  };
+
   // Load conversation history and set up event listeners on component mount
   useEffect(() => {
     loadConversationHistory();
     loadPersistedData();
+
+    // Get initial WebSocket status
+    fetchWebSocketStatus();
 
     // Set up event listeners for WebSocket binary data (audio) and status
     const unsubscribePromises: Promise<() => void>[] = [];
@@ -216,18 +230,17 @@ const Chat: React.FC = () => {
 
     unsubscribePromises.push(transcriptionUnsubscribe);
 
-    // Fetch initial WebSocket status from the backend
-    const fetchWebSocketStatus = async () => {
+    // Connect WebSocket on mount
+    const connectWebSocket = async () => {
       try {
-        const status = await invoke<{ connected: boolean; registered: boolean }>('get_websocket_status');
-        setIsConnected(status.connected);
-        setIsRegistered(status.registered);
+        await invoke('connect_websocket');
+        console.log("WebSocket connected");
       } catch (error) {
-        console.error("Error fetching WebSocket status:", error);
+        console.error("Error connecting WebSocket:", error);
       }
     };
 
-    fetchWebSocketStatus();
+    connectWebSocket();
 
     return () => {
       // Clean up event listeners
