@@ -184,11 +184,11 @@ const Chat: React.FC = () => {
 
     // Listen for WebSocket messages from Lily-Core
     const transcriptionUnsubscribe = listen('websocket-message', (event: { payload: string }) => {
-      // Parse the transcription message (format: "transcription:{json}")
       const messageStr = event.payload;
-      if (messageStr.startsWith('transcription:')) {
-        try {
-          const jsonStr = messageStr.substr(14); // Remove "transcription:" prefix
+      try {
+        // Handle transcription messages
+        if (messageStr.startsWith('transcription:')) {
+          const jsonStr = messageStr.substring(14); // Remove "transcription:" prefix
           const transcriptionData = JSON.parse(jsonStr);
           const { type, text } = transcriptionData;
 
@@ -200,31 +200,18 @@ const Chat: React.FC = () => {
               timestamp: new Date().toISOString()
             });
           } else if (type === 'final') {
-            // Convert live transcription to final message and clear live transcription
-            if (liveTranscription) {
-              const userMessage: Message = {
-                role: "user",
-                content: text,
-                timestamp: new Date().toISOString(),
-              };
-
-              setMessages((prev) => {
-                const newMessages = [...prev, userMessage];
-                // Save chat history whenever it changes
-                persistenceService.saveChatHistory(newMessages);
-                return newMessages;
-              });
-
-              // Clear live transcription
-              setLiveTranscription(null);
-
-              // Log chat sent event
-              logService.logChatSent(text);
-            }
+            // Populate the input bar with the final transcription
+            setInputValue(text);
+            // Clear live transcription
+            setLiveTranscription(null);
           }
-        } catch (error) {
-          console.error("Error parsing transcription message:", error);
+        } else {
+          // Handle other WebSocket messages (e.g., plain text responses)
+          // We can add more logic here if other message types are expected
+          console.log("Received non-transcription message:", messageStr);
         }
+      } catch (error) {
+        console.error("Error processing WebSocket message:", error);
       }
     }).then(unsubscribe => unsubscribe);
 
