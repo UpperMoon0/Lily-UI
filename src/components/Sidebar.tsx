@@ -15,7 +15,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
       {isOpen && (
         <div className="sidebar-overlay" onClick={toggleSidebar}></div>
       )}
-      
+
       {/* Sidebar */}
       <div className={`sidebar ${isOpen ? "open" : ""}`}>
         <div className="sidebar-header">
@@ -32,14 +32,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
           >
             <span className="nav-icon">💬</span>
             <span className="nav-text">Chat</span>
-          </Link>
-          <Link
-            to="/monitor"
-            className={`nav-link ${location.pathname === "/monitor" ? "active" : ""}`}
-            onClick={() => window.innerWidth <= 768 && toggleSidebar()}
-          >
-            <span className="nav-icon">📊</span>
-            <span className="nav-text">Monitor</span>
           </Link>
         </nav>
       </div>

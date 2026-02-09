@@ -3,7 +3,6 @@ import { Routes, Route } from "react-router-dom";
 import "./App.css";
 import Sidebar from "./components/Sidebar";
 import Chat from "./components/Chat";
-import Monitor from "./components/Monitor";
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -29,7 +28,6 @@ function App() {
         </div>
         <Routes>
           <Route path="/" element={<Chat />} />
-          <Route path="/monitor" element={<Monitor />} />
         </Routes>
       </div>
     </div>
