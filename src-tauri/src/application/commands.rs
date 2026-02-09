@@ -93,7 +93,7 @@ pub async fn send_chat_message(message: String, tts_enabled: bool, tts_params: O
         }
     }
 
-    let response = client.post("http://localhost:8000/chat")
+    let response = client.post("http://localhost:8000/api/chat")
         .json(&request_body)
         .send()
         .await
@@ -113,7 +113,7 @@ pub async fn send_chat_message(message: String, tts_enabled: bool, tts_params: O
 #[tauri::command]
 pub async fn get_conversation_history() -> Result<Vec<ChatMessage>, String> {
     let client = reqwest::Client::new();
-    let response = client.get("http://localhost:8000/conversation/default_user")
+    let response = client.get("http://localhost:8000/api/conversation/default_user")
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {}", e))?;
@@ -144,7 +144,7 @@ pub async fn get_conversation_history() -> Result<Vec<ChatMessage>, String> {
 #[tauri::command]
 pub async fn clear_conversation() -> Result<(), String> {
     let client = reqwest::Client::new();
-    let response = client.delete("http://localhost:8000/conversation/default_user")
+    let response = client.delete("http://localhost:8000/api/conversation/default_user")
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {}", e))?;
@@ -159,7 +159,7 @@ pub async fn clear_conversation() -> Result<(), String> {
 #[tauri::command]
 pub async fn get_monitoring_data() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::new();
-    let response = client.get("http://localhost:8000/monitoring")
+    let response = client.get("http://localhost:8000/api/monitoring")
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {}", e))?;
